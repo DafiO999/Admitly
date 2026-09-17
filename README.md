@@ -20,6 +20,9 @@ runs PostgreSQL. The default server listens on `127.0.0.1:3001`;
 `pnpm db:generate` after schema edits.
 
 The seed contains fictional universities and requirements marked `demo`.
+The university provider uses those fixtures when `DEMO_DATA_MODE=true`. With
+`DEMO_DATA_MODE=false`, it uses College Scorecard and needs
+`COLLEGE_SCORECARD_API_KEY`; no public provider endpoint is exposed yet.
 
 The same package scripts work with npm (`npm run dev`, `npm run build`, etc.).
 Run `pnpm lint`, `pnpm typecheck`, `pnpm test`, and `pnpm build` for normal
