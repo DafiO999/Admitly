@@ -17,7 +17,8 @@
     "test:integration": "vitest run --config vitest.integration.config.ts",
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate dev",
-    "db:check": "tsx src/infrastructure/db/check.ts"
+    "db:check": "tsx src/infrastructure/db/check.ts",
+    "db:seed": "prisma db seed"
   },
   "dependencies": {
     "@prisma/client": "6.19.3",

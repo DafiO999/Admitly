@@ -1,8 +1,8 @@
 # Admitly backend
 
-Fastify and TypeScript service for the admission journey project. PostgreSQL
-and Prisma are available for local development; domain tables and business APIs
-arrive in later milestones.
+Fastify and TypeScript service for the admission journey project. PostgreSQL,
+Prisma, domain contracts, and deterministic demo data are available for local
+development. Business APIs arrive in later milestones.
 
 ## Local run
 
@@ -13,11 +13,13 @@ pnpm install
 docker compose -f compose.dev.yml up -d db
 ```
 
-Copy `.env.example` to `.env`, then run `pnpm db:migrate`, `pnpm db:check`, and
-`pnpm dev`. The backend runs on the host, while Docker runs PostgreSQL. The
-default server listens on `127.0.0.1:3001`; `GET /api/health` returns
-`{"status":"ok"}`. Dependency installation generates Prisma Client; run
+Copy `.env.example` to `.env`, then run `pnpm db:migrate`, `pnpm db:seed`,
+`pnpm db:check`, and `pnpm dev`. The backend runs on the host, while Docker
+runs PostgreSQL. The default server listens on `127.0.0.1:3001`;
+`GET /api/health` returns `{"status":"ok"}`. Dependency installation generates Prisma Client; run
 `pnpm db:generate` after schema edits.
+
+The seed contains fictional universities and requirements marked `demo`.
 
 The same package scripts work with npm (`npm run dev`, `npm run build`, etc.).
 Run `pnpm lint`, `pnpm typecheck`, `pnpm test`, and `pnpm build` for normal
