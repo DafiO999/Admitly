@@ -111,4 +111,30 @@ describe('university providers', () => {
     await expect(timedOut.search({})).rejects.toMatchObject({ code: 'TIMEOUT' });
     await expect(timedOut.search({})).rejects.toThrow('University provider timeout');
   });
+
+  it('enforces a deadline even if fetch or response parsing ignores abort', async () => {
+    const never = new Promise<Response>(() => {});
+    const stuckFetch = new CollegeScorecardProvider({
+      apiKey: 'private-key', timeoutMs: 5, fetcher: async () => never,
+    });
+    await expect(stuckFetch.search({})).rejects.toMatchObject({ code: 'TIMEOUT' });
+    const stuckBody = new CollegeScorecardProvider({
+      apiKey: 'private-key', timeoutMs: 5,
+      fetcher: async () => ({ ok: true, json: async () => new Promise(() => {}) }) as Response,
+    });
+    await expect(stuckBody.search({})).rejects.toMatchObject({ code: 'TIMEOUT' });
+  });
+
+  it('keeps fixture-backed mode usable during a Scorecard outage', async () => {
+    const failingFetch = vi.fn<typeof fetch>().mockRejectedValue(new Error('private-key'));
+    const live = createUniversityProvider(
+      { DEMO_DATA_MODE: false, COLLEGE_SCORECARD_API_KEY: 'private-key' }, { fetcher: failingFetch },
+    );
+    await expect(live.search({ field: 'computer_science' })).rejects.toMatchObject({ code: 'UNAVAILABLE' });
+    const demo = createUniversityProvider(
+      { DEMO_DATA_MODE: true, COLLEGE_SCORECARD_API_KEY: 'private-key' }, { fetcher: failingFetch },
+    );
+    expect((await demo.search({ field: 'computer_science' })).length).toBeGreaterThan(0);
+    expect(failingFetch).toHaveBeenCalledTimes(1);
+  });
 });

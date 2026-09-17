@@ -3,6 +3,7 @@ import {
   UniversityProviderError, type UniversityProvider, type UniversitySearchInput,
 } from '../../application/ports/university-provider.js';
 import type { University } from '../../domain/university/schema.js';
+import { ExternalTimeoutError, withTimeout } from '../http/with-timeout.js';
 import { mapScorecardUniversity, scorecardResponseSchema } from './mapper.js';
 
 const BASE_URL = 'https://api.data.gov/ed/collegescorecard/v1/schools';
@@ -75,21 +76,27 @@ export class CollegeScorecardProvider implements UniversityProvider {
   }
 
   private async request(url: URL): Promise<unknown[]> {
-    const signal = AbortSignal.timeout(this.timeoutMs);
-    let response: Response;
     try {
-      response = await this.fetcher(url, { headers: { 'X-Api-Key': this.apiKey }, signal });
-    } catch {
-      throw new UniversityProviderError(signal.aborted ? 'TIMEOUT' : 'UNAVAILABLE');
-    }
-    if (!response.ok) throw new UniversityProviderError('UNAVAILABLE');
-    try {
-      const body: unknown = await response.json();
-      const parsed = scorecardResponseSchema.safeParse(body);
-      if (!parsed.success) throw new UniversityProviderError('INVALID_RESPONSE');
-      return parsed.data.results;
-    } catch {
-      throw new UniversityProviderError(signal.aborted ? 'TIMEOUT' : 'INVALID_RESPONSE');
+      return await withTimeout(this.timeoutMs, async (signal) => {
+        let response: Response;
+        try {
+          response = await this.fetcher(url, { headers: { 'X-Api-Key': this.apiKey }, signal });
+        } catch {
+          throw new UniversityProviderError(signal.aborted ? 'TIMEOUT' : 'UNAVAILABLE');
+        }
+        if (!response.ok) throw new UniversityProviderError('UNAVAILABLE');
+        try {
+          const body: unknown = await response.json();
+          const parsed = scorecardResponseSchema.safeParse(body);
+          if (!parsed.success) throw new UniversityProviderError('INVALID_RESPONSE');
+          return parsed.data.results;
+        } catch {
+          throw new UniversityProviderError(signal.aborted ? 'TIMEOUT' : 'INVALID_RESPONSE');
+        }
+      });
+    } catch (error) {
+      if (error instanceof ExternalTimeoutError) throw new UniversityProviderError('TIMEOUT');
+      throw error;
     }
   }
 }

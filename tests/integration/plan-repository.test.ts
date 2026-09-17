@@ -129,6 +129,46 @@ describe('Prisma plan repository', () => {
       await client.$disconnect();
     }
   });
+
+  it.skipIf(databaseUrl === null)('returns a safe service error for malformed stored snapshots', async () => {
+    const client = createPrismaClient(databaseUrl!);
+    const repository = new PrismaPlanRepository(client);
+    const profileId = randomUUID();
+    const app = buildApp({}, { planRepository: repository });
+    try {
+      const saved = await repository.saveGenerated(generatedPlan(profileId));
+      await client.recommendationRun.update({
+        where: { id: saved.recommendationRun.id },
+        data: { result: { engineVersion: saved.recommendationRun.engineVersion, recommendations: 'secret-data' } },
+      });
+      const response = await app.inject({ method: 'GET', url: `/api/plan/${profileId}` });
+      expect(response.statusCode).toBe(503);
+      expect(response.json()).toEqual({
+        error: { code: 'DATABASE_UNAVAILABLE', message: 'Database unavailable', details: [] },
+      });
+      expect(response.body).not.toContain('secret-data');
+      expect(response.body).not.toContain('stack');
+      await client.recommendationRun.update({
+        where: { id: saved.recommendationRun.id },
+        data: { result: {
+          engineVersion: saved.recommendationRun.engineVersion,
+          recommendations: saved.recommendationRun.recommendations,
+          promptVersions: { ...saved.recommendationRun.promptVersions! },
+        } },
+      });
+      await client.roadmapItem.update({
+        where: { roadmapId_key: { roadmapId: saved.roadmap.id, key: 'research:programs' } },
+        data: { dependsOnIds: 'secret-data' },
+      });
+      const malformedItem = await app.inject({ method: 'GET', url: `/api/plan/${profileId}` });
+      expect(malformedItem.statusCode).toBe(503);
+      expect(malformedItem.body).not.toContain('secret-data');
+    } finally {
+      await app.close();
+      await client.profile.deleteMany({ where: { id: profileId } });
+      await client.$disconnect();
+    }
+  });
 });
 
 describe('persistence API', () => {

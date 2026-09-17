@@ -7,7 +7,8 @@ import { ComparisonUniversityNotFoundError } from '../../application/services/co
 import { RecommendationNotFoundError } from '../../application/services/recommendation-explanation.js';
 import { RoadmapProgramMismatchError, RoadmapUniversityNotFoundError } from '../../application/services/roadmap.js';
 
-type ErrorCode = 'VALIDATION' | 'NOT_FOUND' | 'CONFLICT' | 'EXTERNAL_UNAVAILABLE' | 'DATABASE_UNAVAILABLE' | 'INTERNAL';
+type ErrorCode = 'VALIDATION' | 'REQUEST_TOO_LARGE' | 'NOT_FOUND' | 'CONFLICT'
+  | 'EXTERNAL_UNAVAILABLE' | 'DATABASE_UNAVAILABLE' | 'INTERNAL';
 
 function errorResponse(code: ErrorCode, message: string) {
   return { error: { code, message, details: [] } };
@@ -15,48 +16,55 @@ function errorResponse(code: ErrorCode, message: string) {
 
 export function registerErrorHandlers(app: FastifyInstance): void {
   app.setErrorHandler((error, request, reply) => {
-    // Avoid logging arbitrary error messages, which may contain credentials.
-    request.log.error({ errorName: error instanceof Error ? error.name : 'UnknownError' }, 'Request failed');
+    const send = (status: number, code: ErrorCode, message: string) => {
+      // Log only our fixed category and status. Error names, messages and request data are untrusted.
+      request.log.error({ code, statusCode: status }, 'Request failed');
+      return reply.status(status).send(errorResponse(code, message));
+    };
     const statusCode = typeof error === 'object' && error !== null && 'statusCode' in error
       && typeof error.statusCode === 'number' ? error.statusCode : undefined;
     const hasValidation = typeof error === 'object' && error !== null && 'validation' in error
       && Boolean(error.validation);
 
     if (error instanceof ZodError || hasValidation) {
-      return reply.status(400).send(errorResponse('VALIDATION', 'Invalid request'));
+      return send(400, 'VALIDATION', 'Invalid request');
+    }
+
+    if (statusCode === 413) {
+      return send(413, 'REQUEST_TOO_LARGE', 'Request body too large');
     }
 
     if (error instanceof UniversityProviderError) {
-      return reply.status(error.code === 'CONFIGURATION' ? 503 : 502)
-        .send(errorResponse('EXTERNAL_UNAVAILABLE', 'University data unavailable'));
+      return send(error.code === 'CONFIGURATION' ? 503 : 502,
+        'EXTERNAL_UNAVAILABLE', 'University data unavailable');
     }
 
     if (error instanceof DatabaseUnavailableError) {
-      return reply.status(503).send(errorResponse('DATABASE_UNAVAILABLE', 'Database unavailable'));
+      return send(503, 'DATABASE_UNAVAILABLE', 'Database unavailable');
     }
 
     if (error instanceof PlanConflictError) {
-      return reply.status(409).send(errorResponse('CONFLICT', 'Current plan changed; reload and retry'));
+      return send(409, 'CONFLICT', 'Current plan changed; reload and retry');
     }
 
     if (error instanceof ComparisonUniversityNotFoundError || error instanceof RecommendationNotFoundError
       || error instanceof RoadmapUniversityNotFoundError || error instanceof PersistedPlanNotFoundError) {
-      return reply.status(404).send(errorResponse('NOT_FOUND', 'Not found'));
+      return send(404, 'NOT_FOUND', 'Not found');
     }
 
     if (error instanceof RoadmapProgramMismatchError) {
-      return reply.status(422).send(errorResponse('VALIDATION', 'Selected university has no matching bachelor program'));
+      return send(422, 'VALIDATION', 'Selected university has no matching bachelor program');
     }
 
     if (statusCode === 404) {
-      return reply.status(404).send(errorResponse('NOT_FOUND', 'Not found'));
+      return send(404, 'NOT_FOUND', 'Not found');
     }
 
     if (statusCode && statusCode >= 400 && statusCode < 500) {
-      return reply.status(statusCode).send(errorResponse('VALIDATION', 'Invalid request'));
+      return send(statusCode, 'VALIDATION', 'Invalid request');
     }
 
-    return reply.status(500).send(errorResponse('INTERNAL', 'Internal server error'));
+    return send(500, 'INTERNAL', 'Internal server error');
   });
 
   app.setNotFoundHandler((_request, reply) => {

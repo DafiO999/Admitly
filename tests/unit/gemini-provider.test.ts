@@ -70,6 +70,16 @@ describe('Gemini AI provider', () => {
     expect(fetcher).toHaveBeenCalledTimes(2);
   });
 
+  it('times out a response body that ignores abort and keeps the outage optional', async () => {
+    const fetcher = vi.fn<typeof fetch>().mockResolvedValue({
+      ok: true, json: async () => new Promise(() => {}),
+    } as Response);
+    const provider = new GeminiAiProvider({ apiKey: 'private-key', model: 'gemini-3.8-flash',
+      timeoutMs: 5, fetcher });
+    await expect(provider.explainRecommendation(input)).rejects.toMatchObject({ code: 'TIMEOUT' });
+    expect(fetcher).toHaveBeenCalledTimes(2);
+  });
+
   it('keeps the provider optional without a key', () => {
     expect(createAiProvider({ GEMINI_API_KEY: undefined, GEMINI_MODEL: undefined })).toBeNull();
     expect(() => new GeminiAiProvider({ apiKey: 'private-key', model: '../bad' })).toThrow(AiProviderError);

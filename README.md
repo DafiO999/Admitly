@@ -37,7 +37,9 @@ docker compose -f compose.dev.yml up -d db
 Copy `.env.example` to `.env`, then run `pnpm db:migrate`, `pnpm db:seed`,
 `pnpm db:check`, and `pnpm dev`. The backend runs on the host, while Docker
 runs PostgreSQL. The default server listens on `127.0.0.1:3001`;
-`GET /api/health` returns `{"status":"ok"}`. Dependency installation generates Prisma Client; run
+`GET /api/health` is a liveness check; `GET /api/ready` verifies the PostgreSQL
+plan tables before returning `{"status":"ready"}`. JSON request bodies are
+limited to 128 KiB. Dependency installation generates Prisma Client; run
 `pnpm db:generate` after schema edits.
 
 The seed contains fictional universities and requirements marked `demo`.

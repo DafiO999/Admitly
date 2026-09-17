@@ -24,25 +24,39 @@ export function buildApp(
     requirementProvider?: AdmissionRequirementProvider;
     aiProvider?: AiProvider | null;
     planRepository?: PlanRepository;
+    readinessCheck?: () => Promise<void>;
   } = {},
 ) {
-  const app = Fastify({ ...options, logController: new LogController({ disableRequestLogging: true }) });
+  const app = Fastify({ bodyLimit: 128 * 1024, ...options, logController: new LogController({ disableRequestLogging: true }) });
   const aiProviderFactory = () => dependencies.aiProvider === undefined
     ? createAiProvider(loadEnvironment(process.env)) : dependencies.aiProvider;
   let databaseClient: ReturnType<typeof createPrismaClient> | undefined;
   let planRepository: PlanRepository | undefined;
-  const planRepositoryFactory = () => {
-    if (dependencies.planRepository) return dependencies.planRepository;
-    if (planRepository) return planRepository;
+  const databaseClientFactory = () => {
+    if (databaseClient) return databaseClient;
     const databaseUrl = loadEnvironment(process.env).DATABASE_URL;
     if (!databaseUrl) throw new DatabaseUnavailableError();
     databaseClient = createPrismaClient(databaseUrl);
-    planRepository = new PrismaPlanRepository(databaseClient);
+    return databaseClient;
+  };
+  const planRepositoryFactory = () => {
+    if (dependencies.planRepository) return dependencies.planRepository;
+    if (planRepository) return planRepository;
+    planRepository = new PrismaPlanRepository(databaseClientFactory());
     return planRepository;
   };
+  const checkReadiness = dependencies.readinessCheck ?? (async () => {
+    try {
+      const client = databaseClientFactory();
+      await client.profile.findFirst({ select: { id: true } });
+      await client.roadmap.findFirst({ select: { id: true } });
+    } catch {
+      throw new DatabaseUnavailableError();
+    }
+  });
   app.addHook('onClose', async () => databaseClient?.$disconnect());
   registerErrorHandlers(app);
-  app.register(healthRoutes);
+  app.register(healthRoutes(checkReadiness));
   app.register(diagnosisRoutes(aiProviderFactory));
   app.register(recommendationRoutes(
     () => dependencies.universityProvider ?? createUniversityProvider(loadEnvironment(process.env)),

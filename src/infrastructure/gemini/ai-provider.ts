@@ -7,6 +7,9 @@ import { recommendationExplanationSchema, type RecommendationExplanation } from 
 import {
   DIAGNOSIS_PROMPT_VERSION, RECOMMENDATION_EXPLANATION_PROMPT_VERSION, ROADMAP_PROMPT_VERSION,
 } from '../../domain/versions.js';
+import { ExternalTimeoutError, withTimeout } from '../http/with-timeout.js';
+
+class RetryableStatusError extends Error {}
 
 const responseSchema = z.object({
   candidates: z.array(z.object({
@@ -137,30 +140,35 @@ export class GeminiAiProvider implements AiProvider {
     });
 
     for (let attempt = 0; attempt < 2; attempt += 1) {
-      const signal = AbortSignal.timeout(this.timeoutMs);
-      let response: Response;
       try {
-        response = await this.fetcher(url, {
-          method: 'POST', headers: { 'x-goog-api-key': this.apiKey, 'Content-Type': 'application/json' },
-          body, signal,
+        return await withTimeout(this.timeoutMs, async (signal) => {
+          const response = await this.fetcher(url, {
+            method: 'POST', headers: { 'x-goog-api-key': this.apiKey, 'Content-Type': 'application/json' },
+            body, signal,
+          });
+          if (!response.ok) {
+            if (response.status === 429 || response.status >= 500) throw new RetryableStatusError();
+            throw new AiProviderError('UNAVAILABLE');
+          }
+          let envelope: unknown;
+          try {
+            envelope = await response.json();
+          } catch {
+            throw new AiProviderError('INVALID_RESPONSE');
+          }
+          const parsed = responseSchema.safeParse(envelope);
+          const text = parsed.success ? parsed.data.candidates[0]?.content.parts.find((part) => part.text)?.text : undefined;
+          if (!text) throw new AiProviderError('INVALID_RESPONSE');
+          try {
+            return JSON.parse(text) as unknown;
+          } catch {
+            throw new AiProviderError('INVALID_RESPONSE');
+          }
         });
-      } catch {
+      } catch (error) {
+        if (error instanceof AiProviderError) throw error;
         if (attempt === 0) continue;
-        throw new AiProviderError(signal.aborted ? 'TIMEOUT' : 'UNAVAILABLE');
-      }
-      if (!response.ok) {
-        if (attempt === 0 && (response.status === 429 || response.status >= 500)) continue;
-        throw new AiProviderError('UNAVAILABLE');
-      }
-      try {
-        const envelope: unknown = await response.json();
-        const parsed = responseSchema.safeParse(envelope);
-        const text = parsed.success ? parsed.data.candidates[0]?.content.parts.find((part) => part.text)?.text : undefined;
-        if (!text) throw new AiProviderError('INVALID_RESPONSE');
-        return JSON.parse(text) as unknown;
-      } catch {
-        if (signal.aborted && attempt === 0) continue;
-        throw new AiProviderError(signal.aborted ? 'TIMEOUT' : 'INVALID_RESPONSE');
+        throw new AiProviderError(error instanceof ExternalTimeoutError ? 'TIMEOUT' : 'UNAVAILABLE');
       }
     }
     throw new AiProviderError('UNAVAILABLE');
