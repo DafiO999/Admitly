@@ -1,13 +1,13 @@
 import type { FastifyInstance } from 'fastify';
 import { ZodError } from 'zod';
-import { DatabaseUnavailableError } from '../../application/ports/plan-repository.js';
+import { DatabaseUnavailableError, PlanConflictError } from '../../application/ports/plan-repository.js';
 import { PersistedPlanNotFoundError } from '../../application/services/plan-persistence.js';
 import { UniversityProviderError } from '../../application/ports/university-provider.js';
 import { ComparisonUniversityNotFoundError } from '../../application/services/comparison.js';
 import { RecommendationNotFoundError } from '../../application/services/recommendation-explanation.js';
 import { RoadmapProgramMismatchError, RoadmapUniversityNotFoundError } from '../../application/services/roadmap.js';
 
-type ErrorCode = 'VALIDATION' | 'NOT_FOUND' | 'EXTERNAL_UNAVAILABLE' | 'DATABASE_UNAVAILABLE' | 'INTERNAL';
+type ErrorCode = 'VALIDATION' | 'NOT_FOUND' | 'CONFLICT' | 'EXTERNAL_UNAVAILABLE' | 'DATABASE_UNAVAILABLE' | 'INTERNAL';
 
 function errorResponse(code: ErrorCode, message: string) {
   return { error: { code, message, details: [] } };
@@ -33,6 +33,10 @@ export function registerErrorHandlers(app: FastifyInstance): void {
 
     if (error instanceof DatabaseUnavailableError) {
       return reply.status(503).send(errorResponse('DATABASE_UNAVAILABLE', 'Database unavailable'));
+    }
+
+    if (error instanceof PlanConflictError) {
+      return reply.status(409).send(errorResponse('CONFLICT', 'Current plan changed; reload and retry'));
     }
 
     if (error instanceof ComparisonUniversityNotFoundError || error instanceof RecommendationNotFoundError

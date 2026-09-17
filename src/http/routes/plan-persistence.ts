@@ -1,7 +1,7 @@
 import type { FastifyPluginAsync } from 'fastify';
 import type { PlanRepository } from '../../application/ports/plan-repository.js';
 import {
-  getCurrentPlan, saveProfileAndPlan, updatePersistedRoadmapItem,
+  getCurrentPlan, recalculatePlan, saveProfileAndPlan, updatePersistedRoadmapItem,
 } from '../../application/services/plan-persistence.js';
 import type { RoadmapProviders } from '../../application/services/roadmap.js';
 
@@ -11,6 +11,8 @@ export function planPersistenceRoutes(
 ): FastifyPluginAsync {
   return async (app) => {
     app.put('/api/profile', async (request) => saveProfileAndPlan(request.body, providerFactory, repositoryFactory));
+    app.post('/api/plan/recalculate', async (request) =>
+      recalculatePlan(request.body, providerFactory, repositoryFactory));
     app.get<{ Params: { profileId: string } }>('/api/plan/:profileId', async (request) =>
       getCurrentPlan(request.params.profileId, repositoryFactory));
     app.patch<{ Params: { roadmapId: string; itemId: string } }>(

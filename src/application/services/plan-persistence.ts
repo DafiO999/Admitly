@@ -1,14 +1,19 @@
 import { z } from 'zod';
-import type { PlanRepository } from '../ports/plan-repository.js';
+import type { GeneratedPlan, PlanRepository } from '../ports/plan-repository.js';
 import { UniversityProviderError } from '../ports/university-provider.js';
 import { createRecommendations } from './recommendations.js';
 import type { RoadmapProviders } from './roadmap.js';
 import { studentProfileSchema } from '../../domain/profile/schema.js';
 import { buildRoadmap } from '../../domain/roadmap/builder.js';
+import { preserveCompletedTasks } from '../../domain/roadmap/preserve-completions.js';
 import { roadmapStatusSchema } from '../../domain/roadmap/schema.js';
 import { admissionRequirementSchema } from '../../domain/university/requirement.js';
+import {
+  DIAGNOSIS_PROMPT_VERSION, RECOMMENDATION_EXPLANATION_PROMPT_VERSION, ROADMAP_PROMPT_VERSION,
+} from '../../domain/versions.js';
 
 const saveProfileRequestSchema = z.object({ profile: studentProfileSchema }).strict();
+const recalculateRequestSchema = z.object({ profile: studentProfileSchema.safeExtend({ id: z.uuid() }) }).strict();
 const statusRequestSchema = z.object({ status: roadmapStatusSchema }).strict();
 const idSchema = z.uuid();
 
@@ -19,12 +24,10 @@ export class PersistedPlanNotFoundError extends Error {
   }
 }
 
-export async function saveProfileAndPlan(
-  input: unknown,
+async function generatePlan(
+  profile: z.infer<typeof studentProfileSchema>,
   providerFactory: () => RoadmapProviders,
-  repositoryFactory: () => PlanRepository,
-) {
-  const { profile } = saveProfileRequestSchema.parse(input);
+): Promise<GeneratedPlan> {
   const providers = providerFactory();
   const recommendations = await createRecommendations({ profile }, () => providers.universityProvider);
   const selected = recommendations.recommendations.slice(0, 3);
@@ -43,11 +46,47 @@ export async function saveProfileAndPlan(
     university: recommendation.university,
     requirements: requirements.data,
   })));
-  return repositoryFactory().saveGenerated({
+  return {
     profile, engineVersion: recommendations.engineVersion,
     recommendations: recommendations.recommendations,
     roadmap: generated.roadmap, sourceCoverage: generated.sourceCoverage, selectedUniversityIds,
-  });
+    promptVersions: {
+      diagnosis: DIAGNOSIS_PROMPT_VERSION,
+      recommendationExplanation: RECOMMENDATION_EXPLANATION_PROMPT_VERSION,
+      roadmap: ROADMAP_PROMPT_VERSION,
+    },
+  };
+}
+
+export async function saveProfileAndPlan(
+  input: unknown,
+  providerFactory: () => RoadmapProviders,
+  repositoryFactory: () => PlanRepository,
+) {
+  const { profile } = saveProfileRequestSchema.parse(input);
+  const plan = await generatePlan(profile, providerFactory);
+  return repositoryFactory().saveGenerated(plan);
+}
+
+export async function recalculatePlan(
+  input: unknown,
+  providerFactory: () => RoadmapProviders,
+  repositoryFactory: () => PlanRepository,
+) {
+  const { profile } = recalculateRequestSchema.parse(input);
+  const repository = repositoryFactory();
+  const current = await repository.findCurrent(profile.id);
+  if (!current) throw new PersistedPlanNotFoundError();
+  const generated = await generatePlan(profile, providerFactory);
+  generated.roadmap = preserveCompletedTasks(
+    current.roadmap, generated.roadmap, current.profile, profile,
+    current.roadmap.selectedUniversityIds, generated.selectedUniversityIds,
+  );
+  generated.expectedCurrentRoadmapId = current.roadmap.id;
+  generated.expectedCurrentRoadmapStatuses = current.roadmap.items.map((item) => ({
+    key: item.id, status: item.status,
+  }));
+  return repository.saveGenerated(generated);
 }
 
 export async function getCurrentPlan(profileId: string, repositoryFactory: () => PlanRepository) {

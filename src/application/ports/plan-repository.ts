@@ -9,6 +9,15 @@ export interface GeneratedPlan {
   roadmap: Roadmap;
   sourceCoverage: SourceCoverage;
   selectedUniversityIds: string[];
+  promptVersions: PromptVersions;
+  expectedCurrentRoadmapId?: string;
+  expectedCurrentRoadmapStatuses?: { key: string; status: RoadmapStatus }[];
+}
+
+export interface PromptVersions {
+  diagnosis: string;
+  recommendationExplanation: string;
+  roadmap: string;
 }
 
 export interface PersistedRoadmap extends Roadmap {
@@ -23,6 +32,7 @@ export interface PersistedPlan {
     id: string;
     engineVersion: string;
     recommendations: RecommendedUniversity[];
+    promptVersions?: PromptVersions;
   };
   roadmap: PersistedRoadmap;
   sourceCoverage: SourceCoverage;
@@ -38,5 +48,12 @@ export class DatabaseUnavailableError extends Error {
   constructor() {
     super('Database unavailable');
     this.name = 'DatabaseUnavailableError';
+  }
+}
+
+export class PlanConflictError extends Error {
+  constructor() {
+    super('Current plan changed during recalculation');
+    this.name = 'PlanConflictError';
   }
 }

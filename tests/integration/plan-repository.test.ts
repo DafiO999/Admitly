@@ -2,9 +2,14 @@ import { randomUUID } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
 import { buildApp } from '../../src/app.js';
 import { createProfileHash } from '../../src/domain/profile/hash.js';
+import { PlanConflictError } from '../../src/application/ports/plan-repository.js';
+import { UniversityProviderError } from '../../src/application/ports/university-provider.js';
 import { rankUniversities } from '../../src/domain/recommendation/engine.js';
 import { buildRoadmap } from '../../src/domain/roadmap/builder.js';
-import { RECOMMENDATION_ENGINE_VERSION } from '../../src/domain/versions.js';
+import {
+  DIAGNOSIS_PROMPT_VERSION, RECOMMENDATION_ENGINE_VERSION,
+  RECOMMENDATION_EXPLANATION_PROMPT_VERSION, ROADMAP_PROMPT_VERSION,
+} from '../../src/domain/versions.js';
 import { createPrismaClient } from '../../src/infrastructure/db/prisma/client.js';
 import { PrismaPlanRepository } from '../../src/infrastructure/db/repositories/prisma-plan-repository.js';
 import { canonicalDemoProfile, demoRequirements, demoUniversities } from '../../src/infrastructure/demo/fixtures.js';
@@ -24,6 +29,10 @@ function generatedPlan(profileId: string) {
   }));
   return {
     profile, engineVersion: RECOMMENDATION_ENGINE_VERSION, recommendations,
+    promptVersions: {
+      diagnosis: DIAGNOSIS_PROMPT_VERSION, recommendationExplanation: RECOMMENDATION_EXPLANATION_PROMPT_VERSION,
+      roadmap: ROADMAP_PROMPT_VERSION,
+    },
     ...buildRoadmap(profile, schools), selectedUniversityIds,
   };
 }
@@ -72,6 +81,49 @@ describe('Prisma plan repository', () => {
         roadmapId: saved.roadmap.id, key: 'research:programs', position: 100,
         title: 'Duplicate', category: 'research', priority: 1, dependsOnIds: [], status: 'pending',
       } })).rejects.toThrow();
+    } finally {
+      await client.profile.deleteMany({ where: { id: profileId } });
+      await client.$disconnect();
+    }
+  });
+
+  it.skipIf(databaseUrl === null)('rejects a stale recalculation without changing the current plan', async () => {
+    const client = createPrismaClient(databaseUrl!);
+    const repository = new PrismaPlanRepository(client);
+    const profileId = randomUUID();
+    try {
+      const first = await repository.saveGenerated(generatedPlan(profileId));
+      const second = await repository.saveGenerated({
+        ...generatedPlan(profileId), expectedCurrentRoadmapId: first.roadmap.id,
+      });
+      await expect(repository.saveGenerated({
+        ...generatedPlan(profileId), profile: { ...canonicalDemoProfile, id: profileId, annualBudgetUsd: 5000 },
+        expectedCurrentRoadmapId: first.roadmap.id,
+      })).rejects.toBeInstanceOf(PlanConflictError);
+      expect(await repository.findCurrent(profileId)).toEqual(second);
+    } finally {
+      await client.profile.deleteMany({ where: { id: profileId } });
+      await client.$disconnect();
+    }
+  });
+
+  it.skipIf(databaseUrl === null)('rejects a recalculation based on outdated task statuses', async () => {
+    const client = createPrismaClient(databaseUrl!);
+    const repository = new PrismaPlanRepository(client);
+    const profileId = randomUUID();
+    try {
+      const first = await repository.saveGenerated(generatedPlan(profileId));
+      const expectedCurrentRoadmapStatuses = first.roadmap.items.map((item) => ({
+        key: item.id, status: item.status,
+      }));
+      await repository.updateItemStatus(first.roadmap.id, 'research:programs', 'done');
+      await expect(repository.saveGenerated({
+        ...generatedPlan(profileId), expectedCurrentRoadmapId: first.roadmap.id,
+        expectedCurrentRoadmapStatuses,
+      })).rejects.toBeInstanceOf(PlanConflictError);
+      const current = await repository.findCurrent(profileId);
+      expect(current?.roadmap.id).toBe(first.roadmap.id);
+      expect(current?.roadmap.items.find((item) => item.id === 'research:programs')?.status).toBe('done');
     } finally {
       await client.profile.deleteMany({ where: { id: profileId } });
       await client.$disconnect();
@@ -147,6 +199,109 @@ describe('persistence API', () => {
       expect(response.json().roadmap.nextActionId).toBe('research:programs');
       const loaded = await app.inject({ method: 'GET', url: `/api/plan/${profileId}` });
       expect(loaded.json()).toEqual(response.json());
+    } finally {
+      await app.close();
+      await client.profile.deleteMany({ where: { id: profileId } });
+      await client.$disconnect();
+    }
+  });
+
+  it.skipIf(databaseUrl === null)('recalculates budget, field, and SAT without retaining stale explanations', async () => {
+    const client = createPrismaClient(databaseUrl!);
+    const profileId = randomUUID();
+    let failRequirements = false;
+    const demoRequirementProvider = new DemoAdmissionRequirementProvider();
+    const app = buildApp({}, {
+      universityProvider: new DemoUniversityProvider(),
+      requirementProvider: { listByUniversityIds: async (ids) => {
+        if (failRequirements) throw new UniversityProviderError('UNAVAILABLE');
+        return demoRequirementProvider.listByUniversityIds(ids);
+      } },
+      planRepository: new PrismaPlanRepository(client), aiProvider: null,
+    });
+    const profile = { ...canonicalDemoProfile, id: profileId };
+    const itemStatus = (plan: { roadmap: { items: { id: string; status: string }[] } }, id: string) =>
+      plan.roadmap.items.find((item) => item.id === id)?.status;
+    try {
+      const initialResponse = await app.inject({ method: 'PUT', url: '/api/profile', payload: { profile } });
+      expect(initialResponse.statusCode).toBe(200);
+      const initial = initialResponse.json();
+      for (const itemId of ['research:programs', 'research:budget', 'document:academic-records']) {
+        const response = await app.inject({
+          method: 'PATCH', url: `/api/roadmaps/${initial.roadmap.id}/items/${encodeURIComponent(itemId)}`,
+          payload: { status: 'done' },
+        });
+        expect(response.statusCode).toBe(200);
+      }
+      const withExplanation = {
+        engineVersion: initial.recommendationRun.engineVersion,
+        promptVersions: initial.recommendationRun.promptVersions,
+        recommendations: structuredClone(initial.recommendationRun.recommendations),
+      };
+      withExplanation.recommendations[0].explanation = {
+        summary: 'Outdated explanation', reasons: ['Old score'], concerns: [],
+      };
+      await client.recommendationRun.update({
+        where: { id: initial.recommendationRun.id }, data: { result: withExplanation },
+      });
+      const budgetProfile = { ...profile, annualBudgetUsd: 60000 };
+      const budgetResponse = await app.inject({
+        method: 'POST', url: '/api/plan/recalculate', payload: { profile: budgetProfile },
+      });
+      expect(budgetResponse.statusCode).toBe(200);
+      const budget = budgetResponse.json();
+      expect(budget.profileHash).not.toBe(initial.profileHash);
+      expect(budget.recommendationRun.id).not.toBe(initial.recommendationRun.id);
+      expect(budget.roadmap.id).not.toBe(initial.roadmap.id);
+      expect(budget.recommendationRun.recommendations.every((item: { explanation?: object }) => !item.explanation))
+        .toBe(true);
+      expect(budget.recommendationRun.promptVersions).toEqual(initial.recommendationRun.promptVersions);
+      expect(budget.recommendationRun.engineVersion).toBe(RECOMMENDATION_ENGINE_VERSION);
+      expect(budget.roadmap.rulesVersion).toBe(initial.roadmap.rulesVersion);
+      expect(itemStatus(budget, 'document:academic-records')).toBe('done');
+      expect(itemStatus(budget, 'research:budget')).toBe('pending');
+      const budgetScore = (item: { components: { key: string; score: number }[] }) =>
+        item.components.find((component) => component.key === 'budget')!.score;
+      expect(initial.recommendationRun.recommendations.some((item: { universityId: string; components: { key: string; score: number }[] }) => {
+        const updated = budget.recommendationRun.recommendations
+          .find((candidate: { universityId: string }) => candidate.universityId === item.universityId);
+        return updated && budgetScore(updated) > budgetScore(item);
+      })).toBe(true);
+
+      const fieldProfile = { ...budgetProfile, targetField: 'business' as const };
+      const fieldResponse = await app.inject({
+        method: 'POST', url: '/api/plan/recalculate', payload: { profile: fieldProfile },
+      });
+      expect(fieldResponse.statusCode).toBe(200);
+      const field = fieldResponse.json();
+      expect(field.recommendationRun.recommendations.every((item: { university: { programs: { field: string }[] } }) =>
+        item.university.programs.some((program) => program.field === 'business'))).toBe(true);
+      expect(field.roadmap.selectedUniversityIds).not.toEqual(budget.roadmap.selectedUniversityIds);
+      expect(itemStatus(field, 'research:programs')).toBe('pending');
+      expect(itemStatus(field, 'document:academic-records')).toBe('done');
+
+      const satProfile = { ...fieldProfile, sat: { status: 'planned' as const } };
+      const satResponse = await app.inject({
+        method: 'POST', url: '/api/plan/recalculate', payload: { profile: satProfile },
+      });
+      expect(satResponse.statusCode).toBe(200);
+      const sat = satResponse.json();
+      expect(itemStatus(sat, 'exam:sat')).toBe('pending');
+      expect(sat.recommendationRun.recommendations.some((item: { reasonCodes: string[] }) =>
+        item.reasonCodes.includes('SAT_NOT_PROVIDED'))).toBe(false);
+      expect(sat.recommendationRun.recommendations[0].components
+        .find((component: { key: string }) => component.key === 'academic').score)
+        .not.toBe(field.recommendationRun.recommendations[0].components
+          .find((component: { key: string }) => component.key === 'academic').score);
+      const loaded = await app.inject({ method: 'GET', url: `/api/plan/${profileId}` });
+      expect(loaded.json()).toEqual(sat);
+      failRequirements = true;
+      const failed = await app.inject({
+        method: 'POST', url: '/api/plan/recalculate',
+        payload: { profile: { ...satProfile, annualBudgetUsd: 5000 } },
+      });
+      expect(failed.statusCode).toBe(502);
+      expect((await app.inject({ method: 'GET', url: `/api/plan/${profileId}` })).json()).toEqual(sat);
     } finally {
       await app.close();
       await client.profile.deleteMany({ where: { id: profileId } });

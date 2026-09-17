@@ -19,8 +19,11 @@ reports source coverage, and marks one available next action. An optional
 deterministic.
 `PUT /api/profile` saves a profile and its initial recommendation and roadmap
 snapshots in PostgreSQL. `GET /api/plan/:profileId` reads the current plan, and
-`PATCH /api/roadmaps/:roadmapId/items/:itemId` updates a task status and next
-action. These persistence routes require `DATABASE_URL`.
+  `PATCH /api/roadmaps/:roadmapId/items/:itemId` updates a task status and next
+  action. `POST /api/plan/recalculate` accepts an updated profile with its ID,
+  recomputes the current plan, and carries forward completed tasks only when
+  their meaning and prerequisites still match. These persistence routes require
+  `DATABASE_URL`.
 
 ## Local run
 

@@ -2,7 +2,8 @@ import { randomUUID } from 'node:crypto';
 import { Prisma, type PrismaClient, type RoadmapItem as StoredRoadmapItem } from '@prisma/client';
 import { z } from 'zod';
 import {
-  DatabaseUnavailableError, type GeneratedPlan, type PersistedPlan, type PersistedRoadmap, type PlanRepository,
+  DatabaseUnavailableError, PlanConflictError, type GeneratedPlan, type PersistedPlan, type PersistedRoadmap,
+  type PlanRepository,
 } from '../../../application/ports/plan-repository.js';
 import { createProfileHash } from '../../../domain/profile/hash.js';
 import { normalizeGpa } from '../../../domain/profile/normalize.js';
@@ -16,6 +17,9 @@ import {
 const runSnapshotSchema = z.object({
   engineVersion: z.string().min(1),
   recommendations: z.array(recommendedUniversitySchema),
+  promptVersions: z.object({
+    diagnosis: z.string().min(1), recommendationExplanation: z.string().min(1), roadmap: z.string().min(1),
+  }).strict().optional(),
 }).strict();
 
 function json(value: unknown): Prisma.InputJsonValue {
@@ -59,6 +63,7 @@ export class PrismaPlanRepository implements PlanRepository {
   async saveGenerated(input: GeneratedPlan): Promise<PersistedPlan> {
     const profile = studentProfileSchema.parse(input.profile);
     const recommendations = recommendedUniversitySchema.array().parse(input.recommendations);
+    const promptVersions = runSnapshotSchema.shape.promptVersions.unwrap().parse(input.promptVersions);
     const roadmap = roadmapSchema.parse(input.roadmap);
     const sourceCoverage = sourceCoverageSchema.parse(input.sourceCoverage);
     const selectedUniversityIds = z.array(z.string().min(1)).parse(input.selectedUniversityIds);
@@ -73,6 +78,20 @@ export class PrismaPlanRepository implements PlanRepository {
     };
     try {
       const saved = await this.client.$transaction(async (transaction) => {
+        if (input.expectedCurrentRoadmapId) {
+          const current = await transaction.profile.findUnique({
+            where: { id: profileId }, select: { currentRoadmapId: true },
+          });
+          if (current?.currentRoadmapId !== input.expectedCurrentRoadmapId) throw new PlanConflictError();
+          if (input.expectedCurrentRoadmapStatuses) {
+            const statuses = await transaction.roadmapItem.findMany({
+              where: { roadmapId: input.expectedCurrentRoadmapId },
+              select: { key: true, status: true }, orderBy: { key: 'asc' },
+            });
+            const expected = [...input.expectedCurrentRoadmapStatuses].sort((a, b) => a.key.localeCompare(b.key));
+            if (JSON.stringify(statuses) !== JSON.stringify(expected)) throw new PlanConflictError();
+          }
+        }
         await transaction.profile.upsert({
           where: { id: profileId },
           create: { id: profileId, ...profileData },
@@ -81,7 +100,7 @@ export class PrismaPlanRepository implements PlanRepository {
         const run = await transaction.recommendationRun.create({
           data: {
             profileId, profileHash, engineVersion: input.engineVersion,
-            result: json({ engineVersion: input.engineVersion, recommendations }),
+            result: json({ engineVersion: input.engineVersion, recommendations, promptVersions }),
           },
         });
         const savedRoadmap = await transaction.roadmap.create({
@@ -103,13 +122,15 @@ export class PrismaPlanRepository implements PlanRepository {
           where: { id: profileId }, data: { currentRoadmapId: savedRoadmap.id },
         });
         return { runId: run.id, roadmapId: savedRoadmap.id };
-      });
+      }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
       return {
         profile: storedProfile, profileHash,
-        recommendationRun: { id: saved.runId, engineVersion: input.engineVersion, recommendations },
+        recommendationRun: { id: saved.runId, engineVersion: input.engineVersion, recommendations, promptVersions },
         roadmap: { ...roadmap, id: saved.roadmapId, selectedUniversityIds }, sourceCoverage,
       };
-    } catch {
+    } catch (error) {
+      if (error instanceof PlanConflictError || (error instanceof Prisma.PrismaClientKnownRequestError
+        && error.code === 'P2034' && input.expectedCurrentRoadmapId)) throw new PlanConflictError();
       throw new DatabaseUnavailableError();
     }
   }
@@ -136,7 +157,10 @@ export class PrismaPlanRepository implements PlanRepository {
       }
       return {
         profile: { ...profile, id: row.id }, profileHash: row.profileHash,
-        recommendationRun: { id: run.id, ...snapshot },
+        recommendationRun: {
+          id: run.id, engineVersion: snapshot.engineVersion, recommendations: snapshot.recommendations,
+          ...(snapshot.promptVersions ? { promptVersions: snapshot.promptVersions } : {}),
+        },
         roadmap: fromStoredRoadmap(roadmap),
         sourceCoverage: sourceCoverageSchema.parse(roadmap.sourceCoverage),
       };

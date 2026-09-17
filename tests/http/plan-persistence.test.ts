@@ -28,6 +28,15 @@ describe('persistence HTTP errors', () => {
       const missing = await app.inject({ method: 'GET', url: `/api/plan/${randomUUID()}` });
       expect(missing.statusCode).toBe(404);
       expect(missing.json().error.code).toBe('NOT_FOUND');
+      const missingProfileId = await app.inject({
+        method: 'POST', url: '/api/plan/recalculate', payload: { profile: canonicalDemoProfile },
+      });
+      expect(missingProfileId.statusCode).toBe(400);
+      const missingPlan = await app.inject({
+        method: 'POST', url: '/api/plan/recalculate',
+        payload: { profile: { ...canonicalDemoProfile, id: randomUUID() } },
+      });
+      expect(missingPlan.statusCode).toBe(404);
     } finally {
       await app.close();
     }
