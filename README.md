@@ -62,15 +62,33 @@ uses `/api/health`, while `/api/ready` checks database availability. The
 runtime image includes the Prisma CLI and migrations for an explicit
 `npx --no-install prisma migrate deploy` deployment step.
 
-## Production Compose contract
+## Production operations
 
 `deploy/compose.prod.yml` connects PostgreSQL to the API on a private network
 and publishes only Caddy's HTTP and HTTPS ports. PostgreSQL and Caddy state use
 named volumes. Copy `deploy/env.production.example` to the ignored
-`deploy/.env.production`, replace the placeholders, and validate with
-`docker compose -f deploy/compose.prod.yml --env-file deploy/.env.production config`.
-The API readiness check requires migrated database tables; migrations are an
-explicit step before starting the API and Caddy.
+`deploy/.env.production` and replace the placeholders. On a Linux server with
+Docker Compose, run `bash deploy/scripts/deploy.sh` from the repository root. It
+validates Compose configuration, builds the API, waits for PostgreSQL, runs
+`prisma migrate deploy`, recreates the API and Caddy, and checks health and
+database readiness. It does not remove named volumes.
+
+Run `bash deploy/scripts/backup-db.sh` to save a timestamped PostgreSQL custom
+dump under the ignored `backups/` directory. Set `BACKUP_DIR` to choose another
+host directory. Copy backups off the server as part of your backup policy.
+To restore, stop the application services, then name both the dump and target
+database explicitly:
+
+```bash
+docker compose -p admitly -f deploy/compose.prod.yml --env-file deploy/.env.production stop api caddy
+bash deploy/scripts/restore-db.sh backups/admitly_YYYY-MM-DD_HH-MM-SS.dump --confirm-db=admitly
+bash deploy/scripts/deploy.sh
+```
+
+Restore replaces objects contained in the dump. Keep a pre-restore backup and
+verify that the previous application revision is compatible with any newer
+database migrations before rolling back code. Set `ADMITLY_ENV_FILE` and
+`ADMITLY_PROJECT` to target a different environment or Compose project.
 
 `TEST_DATABASE_URL` in `.env.example` uses the dedicated `admitly_test` schema.
 Apply migrations to that schema before `pnpm test:integration`, for example by
