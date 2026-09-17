@@ -1,7 +1,8 @@
 import type { FastifyInstance } from 'fastify';
 import { ZodError } from 'zod';
+import { UniversityProviderError } from '../../application/ports/university-provider.js';
 
-type ErrorCode = 'VALIDATION' | 'NOT_FOUND' | 'INTERNAL';
+type ErrorCode = 'VALIDATION' | 'NOT_FOUND' | 'EXTERNAL_UNAVAILABLE' | 'INTERNAL';
 
 function errorResponse(code: ErrorCode, message: string) {
   return { error: { code, message, details: [] } };
@@ -18,6 +19,11 @@ export function registerErrorHandlers(app: FastifyInstance): void {
 
     if (error instanceof ZodError || hasValidation) {
       return reply.status(400).send(errorResponse('VALIDATION', 'Invalid request'));
+    }
+
+    if (error instanceof UniversityProviderError) {
+      return reply.status(error.code === 'CONFIGURATION' ? 503 : 502)
+        .send(errorResponse('EXTERNAL_UNAVAILABLE', 'University data unavailable'));
     }
 
     if (statusCode === 404) {

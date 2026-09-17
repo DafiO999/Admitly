@@ -13,6 +13,7 @@ const scorecardRow = {
   'school.school_url': 'www.example.edu',
   '2023.student.size': 8000,
   '2023.admissions.admission_rate.overall': 0.3,
+  '2023.admissions.sat_scores.average.overall': 1553,
   '2023.cost.tuition.out_of_state': null,
   'latest.programs.cip_4_digit': [
     { code: '1107', title: 'Computer Science.', credential: { level: 3 } },
@@ -64,6 +65,7 @@ describe('university providers', () => {
     expect(String(url)).not.toContain('private-key');
     expect(init?.headers).toEqual({ 'X-Api-Key': 'private-key' });
     expect(JSON.stringify(universities)).not.toContain('private-key');
+    expect(universities[0]).not.toHaveProperty('satMedian');
   });
 
   it('does not invent a single data year for latest fields', () => {

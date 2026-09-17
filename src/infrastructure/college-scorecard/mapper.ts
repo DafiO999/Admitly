@@ -19,7 +19,6 @@ const optionalText = z.string().trim().min(1);
 const optionalState = z.string().regex(/^[A-Z]{2}$/);
 const optionalCount = z.number().int().nonnegative();
 const optionalRate = z.number().min(0).max(1);
-const optionalSat = z.number().int().min(400).max(1600);
 
 function optionalValue<T>(schema: z.ZodType<T>, value: unknown): T | undefined {
   const parsed = schema.safeParse(value);
@@ -83,7 +82,6 @@ export function mapScorecardUniversity(value: unknown, year?: number): Universit
     admissionRate: optionalValue(optionalRate, row[`${prefix}.admissions.admission_rate.overall`]),
     tuitionOutOfStateUsd: optionalValue(optionalCount, row[`${prefix}.cost.tuition.out_of_state`]),
     averageNetPriceUsd: optionalValue(optionalCount, row[`${prefix}.cost.avg_net_price.overall`]),
-    satMedian: optionalValue(optionalSat, row[`${prefix}.admissions.sat_scores.average.overall`]),
     programs,
     dataYear: year,
     sourceUrl,

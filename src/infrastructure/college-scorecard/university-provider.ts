@@ -10,7 +10,6 @@ const FIELDS = [
   'id', 'school.name', 'school.city', 'school.state', 'school.school_url',
   'student.size', 'admissions.admission_rate.overall',
   'cost.tuition.out_of_state', 'cost.avg_net_price.overall',
-  'admissions.sat_scores.average.overall',
 ];
 
 const searchSchema = z.object({

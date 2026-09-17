@@ -3,6 +3,8 @@
 Fastify and TypeScript service for the admission journey project. PostgreSQL,
 Prisma, domain contracts, and deterministic demo data are available for local
 development. `POST /api/diagnosis` returns a rules-based profile diagnosis.
+`POST /api/recommendations` returns ranked universities and score components.
+Its fit score describes profile match, not admission probability.
 
 ## Local run
 

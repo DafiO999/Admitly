@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { universitySchema } from '../university/schema.js';
 
 export const scoreComponentSchema = z.object({
   key: z.enum(['academic', 'program', 'budget', 'preferences']),
@@ -23,3 +24,9 @@ export const recommendationSchema = z.object({
   }).strict().optional(),
 }).strict();
 export type Recommendation = z.infer<typeof recommendationSchema>;
+
+export const recommendedUniversitySchema = z.object({
+  ...recommendationSchema.shape,
+  university: universitySchema,
+}).strict();
+export type RecommendedUniversity = z.infer<typeof recommendedUniversitySchema>;
