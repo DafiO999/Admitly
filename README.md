@@ -2,7 +2,7 @@
 
 Fastify and TypeScript service for the admission journey project. PostgreSQL,
 Prisma, domain contracts, and deterministic demo data are available for local
-development. Business APIs arrive in later milestones.
+development. `POST /api/diagnosis` returns a rules-based profile diagnosis.
 
 ## Local run
 
