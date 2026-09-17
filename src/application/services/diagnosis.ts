@@ -6,7 +6,7 @@ import { aiDiagnosisOutputSchema, type Diagnosis } from '../../domain/diagnosis/
 import { studentProfileSchema } from '../../domain/profile/schema.js';
 import { DIAGNOSIS_PROMPT_VERSION } from '../../domain/versions.js';
 
-const diagnosisRequestSchema = z.object({
+export const diagnosisRequestSchema = z.object({
   profile: studentProfileSchema,
   enhanceWithAi: z.boolean().optional(),
 }).strict();

@@ -5,7 +5,7 @@ import { rankUniversities } from '../../domain/recommendation/engine.js';
 import { RECOMMENDATION_ENGINE_VERSION } from '../../domain/versions.js';
 import { universitySchema } from '../../domain/university/schema.js';
 
-const recommendationRequestSchema = z.object({ profile: studentProfileSchema }).strict();
+export const recommendationRequestSchema = z.object({ profile: studentProfileSchema }).strict();
 
 export async function createRecommendations(input: unknown, providerFactory: () => UniversityProvider) {
   const { profile } = recommendationRequestSchema.parse(input);

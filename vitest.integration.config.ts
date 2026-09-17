@@ -5,5 +5,7 @@ export default defineConfig({
     include: ['tests/integration/**/*.test.ts'],
     environment: 'node',
     setupFiles: ['dotenv/config'],
+    // All integration files share the guarded admitly_test schema.
+    fileParallelism: false,
   },
 });

@@ -7,7 +7,7 @@ import { RECOMMENDATION_ENGINE_VERSION } from '../../domain/versions.js';
 import { admissionRequirementSchema } from '../../domain/university/requirement.js';
 import { universitySchema } from '../../domain/university/schema.js';
 
-const comparisonRequestSchema = z.object({
+export const comparisonRequestSchema = z.object({
   profile: studentProfileSchema,
   universityIds: z.array(z.string().min(1)).min(2).max(3).refine((ids) => new Set(ids).size === ids.length, {
     message: 'University IDs must be unique',

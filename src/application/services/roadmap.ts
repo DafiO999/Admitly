@@ -10,7 +10,7 @@ import { admissionRequirementSchema } from '../../domain/university/requirement.
 import { universitySchema } from '../../domain/university/schema.js';
 import { ROADMAP_PROMPT_VERSION } from '../../domain/versions.js';
 
-const roadmapRequestSchema = z.object({
+export const roadmapRequestSchema = z.object({
   profile: studentProfileSchema,
   selectedUniversityIds: z.array(z.string().min(1)).min(1).max(3).refine((ids) => new Set(ids).size === ids.length, {
     message: 'University IDs must be unique',

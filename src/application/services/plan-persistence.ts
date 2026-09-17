@@ -12,9 +12,9 @@ import {
   DIAGNOSIS_PROMPT_VERSION, RECOMMENDATION_EXPLANATION_PROMPT_VERSION, ROADMAP_PROMPT_VERSION,
 } from '../../domain/versions.js';
 
-const saveProfileRequestSchema = z.object({ profile: studentProfileSchema }).strict();
-const recalculateRequestSchema = z.object({ profile: studentProfileSchema.safeExtend({ id: z.uuid() }) }).strict();
-const statusRequestSchema = z.object({ status: roadmapStatusSchema }).strict();
+export const saveProfileRequestSchema = z.object({ profile: studentProfileSchema }).strict();
+export const recalculateRequestSchema = z.object({ profile: studentProfileSchema.safeExtend({ id: z.uuid() }) }).strict();
+export const statusRequestSchema = z.object({ status: roadmapStatusSchema }).strict();
 const idSchema = z.uuid();
 
 export class PersistedPlanNotFoundError extends Error {

@@ -1,0 +1,3688 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Admitly backend API",
+    "version": "1.0.0",
+    "description": "Fit scores describe profile match, not admission probability. Demo source data is fictional."
+  },
+  "components": {
+    "schemas": {
+      "Error": {
+        "type": "object",
+        "properties": {
+          "error": {
+            "type": "object",
+            "properties": {
+              "code": {
+                "type": "string",
+                "enum": [
+                  "VALIDATION",
+                  "REQUEST_TOO_LARGE",
+                  "NOT_FOUND",
+                  "CONFLICT",
+                  "EXTERNAL_UNAVAILABLE",
+                  "DATABASE_UNAVAILABLE",
+                  "INTERNAL"
+                ]
+              },
+              "message": {
+                "type": "string"
+              },
+              "details": {
+                "type": "array",
+                "items": {}
+              }
+            },
+            "required": [
+              "code",
+              "message",
+              "details"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "error"
+        ],
+        "additionalProperties": false
+      },
+      "HealthResponse": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "const": "ok"
+          }
+        },
+        "required": [
+          "status"
+        ]
+      },
+      "ReadyResponse": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "const": "ready"
+          }
+        },
+        "required": [
+          "status"
+        ]
+      },
+      "DiagnosisRequest": {
+        "type": "object",
+        "properties": {
+          "profile": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+              },
+              "targetCountry": {
+                "type": "string",
+                "const": "US"
+              },
+              "targetDegree": {
+                "type": "string",
+                "const": "bachelor"
+              },
+              "targetField": {
+                "type": "string",
+                "enum": [
+                  "computer_science",
+                  "engineering",
+                  "business",
+                  "economics",
+                  "design",
+                  "other"
+                ]
+              },
+              "targetIntakeYear": {
+                "type": "integer",
+                "minimum": 2020,
+                "maximum": 2100
+              },
+              "gpaValue": {
+                "type": "number",
+                "minimum": 0
+              },
+              "gpaScale": {
+                "anyOf": [
+                  {
+                    "type": "number",
+                    "const": 4
+                  },
+                  {
+                    "type": "number",
+                    "const": 5
+                  },
+                  {
+                    "type": "number",
+                    "const": 10
+                  },
+                  {
+                    "type": "number",
+                    "const": 100
+                  }
+                ]
+              },
+              "englishExam": {
+                "type": "object",
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "IELTS",
+                      "TOEFL",
+                      "DUOLINGO"
+                    ]
+                  },
+                  "status": {
+                    "type": "string",
+                    "enum": [
+                      "not_planned",
+                      "planned",
+                      "taken"
+                    ]
+                  },
+                  "score": {
+                    "type": "number"
+                  }
+                },
+                "required": [
+                  "type",
+                  "status"
+                ],
+                "additionalProperties": false
+              },
+              "sat": {
+                "type": "object",
+                "properties": {
+                  "status": {
+                    "type": "string",
+                    "enum": [
+                      "not_planned",
+                      "planned",
+                      "taken"
+                    ]
+                  },
+                  "score": {
+                    "type": "integer",
+                    "minimum": 400,
+                    "maximum": 1600
+                  }
+                },
+                "required": [
+                  "status"
+                ],
+                "additionalProperties": false
+              },
+              "annualBudgetUsd": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "preferredStates": {
+                "maxItems": 10,
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "pattern": "^[A-Z]{2}$"
+                }
+              },
+              "campusSize": {
+                "type": "string",
+                "enum": [
+                  "small",
+                  "medium",
+                  "large",
+                  "any"
+                ]
+              }
+            },
+            "required": [
+              "targetCountry",
+              "targetDegree",
+              "targetField",
+              "targetIntakeYear",
+              "gpaValue",
+              "gpaScale",
+              "annualBudgetUsd"
+            ],
+            "additionalProperties": false
+          },
+          "enhanceWithAi": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "profile"
+        ],
+        "additionalProperties": false
+      },
+      "DiagnosisResponse": {
+        "type": "object",
+        "properties": {
+          "diagnosis": {
+            "type": "object",
+            "properties": {
+              "goalSummary": {
+                "type": "string"
+              },
+              "strengths": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "constraints": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "focusNow": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            },
+            "required": [
+              "goalSummary",
+              "strengths",
+              "constraints",
+              "focusNow"
+            ],
+            "additionalProperties": false
+          },
+          "mode": {
+            "type": "string",
+            "enum": [
+              "rules",
+              "gemini"
+            ]
+          },
+          "promptVersion": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "diagnosis",
+          "mode"
+        ],
+        "additionalProperties": false
+      },
+      "RecommendationsRequest": {
+        "type": "object",
+        "properties": {
+          "profile": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+              },
+              "targetCountry": {
+                "type": "string",
+                "const": "US"
+              },
+              "targetDegree": {
+                "type": "string",
+                "const": "bachelor"
+              },
+              "targetField": {
+                "type": "string",
+                "enum": [
+                  "computer_science",
+                  "engineering",
+                  "business",
+                  "economics",
+                  "design",
+                  "other"
+                ]
+              },
+              "targetIntakeYear": {
+                "type": "integer",
+                "minimum": 2020,
+                "maximum": 2100
+              },
+              "gpaValue": {
+                "type": "number",
+                "minimum": 0
+              },
+              "gpaScale": {
+                "anyOf": [
+                  {
+                    "type": "number",
+                    "const": 4
+                  },
+                  {
+                    "type": "number",
+                    "const": 5
+                  },
+                  {
+                    "type": "number",
+                    "const": 10
+                  },
+                  {
+                    "type": "number",
+                    "const": 100
+                  }
+                ]
+              },
+              "englishExam": {
+                "type": "object",
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "IELTS",
+                      "TOEFL",
+                      "DUOLINGO"
+                    ]
+                  },
+                  "status": {
+                    "type": "string",
+                    "enum": [
+                      "not_planned",
+                      "planned",
+                      "taken"
+                    ]
+                  },
+                  "score": {
+                    "type": "number"
+                  }
+                },
+                "required": [
+                  "type",
+                  "status"
+                ],
+                "additionalProperties": false
+              },
+              "sat": {
+                "type": "object",
+                "properties": {
+                  "status": {
+                    "type": "string",
+                    "enum": [
+                      "not_planned",
+                      "planned",
+                      "taken"
+                    ]
+                  },
+                  "score": {
+                    "type": "integer",
+                    "minimum": 400,
+                    "maximum": 1600
+                  }
+                },
+                "required": [
+                  "status"
+                ],
+                "additionalProperties": false
+              },
+              "annualBudgetUsd": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "preferredStates": {
+                "maxItems": 10,
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "pattern": "^[A-Z]{2}$"
+                }
+              },
+              "campusSize": {
+                "type": "string",
+                "enum": [
+                  "small",
+                  "medium",
+                  "large",
+                  "any"
+                ]
+              }
+            },
+            "required": [
+              "targetCountry",
+              "targetDegree",
+              "targetField",
+              "targetIntakeYear",
+              "gpaValue",
+              "gpaScale",
+              "annualBudgetUsd"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "profile"
+        ],
+        "additionalProperties": false
+      },
+      "RecommendationsResponse": {
+        "type": "object",
+        "properties": {
+          "engineVersion": {
+            "type": "string"
+          },
+          "recommendations": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "universityId": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "fitScore": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 100
+                },
+                "components": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "key": {
+                        "type": "string",
+                        "enum": [
+                          "academic",
+                          "program",
+                          "budget",
+                          "preferences"
+                        ]
+                      },
+                      "score": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 9007199254740991
+                      },
+                      "maxScore": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 9007199254740991
+                      },
+                      "reasons": {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      }
+                    },
+                    "required": [
+                      "key",
+                      "score",
+                      "maxScore",
+                      "reasons"
+                    ],
+                    "additionalProperties": false
+                  }
+                },
+                "reasonCodes": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "concerns": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "code": {
+                        "type": "string"
+                      },
+                      "message": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "code",
+                      "message"
+                    ],
+                    "additionalProperties": false
+                  }
+                },
+                "explanation": {
+                  "type": "object",
+                  "properties": {
+                    "summary": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 300
+                    },
+                    "reasons": {
+                      "maxItems": 4,
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 300
+                      }
+                    },
+                    "concerns": {
+                      "maxItems": 4,
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 300
+                      }
+                    }
+                  },
+                  "required": [
+                    "summary",
+                    "reasons",
+                    "concerns"
+                  ],
+                  "additionalProperties": false
+                },
+                "university": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "provider": {
+                      "type": "string",
+                      "enum": [
+                        "college_scorecard",
+                        "curated",
+                        "demo"
+                      ]
+                    },
+                    "name": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "city": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "state": {
+                      "type": "string",
+                      "pattern": "^[A-Z]{2}$"
+                    },
+                    "websiteUrl": {
+                      "type": "string",
+                      "format": "uri"
+                    },
+                    "studentSize": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 9007199254740991
+                    },
+                    "admissionRate": {
+                      "type": "number",
+                      "minimum": 0,
+                      "maximum": 1
+                    },
+                    "tuitionOutOfStateUsd": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 9007199254740991
+                    },
+                    "averageNetPriceUsd": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 9007199254740991
+                    },
+                    "satMedian": {
+                      "type": "integer",
+                      "minimum": 400,
+                      "maximum": 1600
+                    },
+                    "programs": {
+                      "minItems": 1,
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "key": {
+                            "type": "string",
+                            "minLength": 1
+                          },
+                          "name": {
+                            "type": "string",
+                            "minLength": 1
+                          },
+                          "field": {
+                            "type": "string",
+                            "enum": [
+                              "computer_science",
+                              "engineering",
+                              "business",
+                              "economics",
+                              "design",
+                              "other"
+                            ]
+                          },
+                          "degree": {
+                            "type": "string",
+                            "const": "bachelor"
+                          },
+                          "sourceStatus": {
+                            "type": "string",
+                            "enum": [
+                              "official",
+                              "verified",
+                              "demo",
+                              "unknown"
+                            ]
+                          },
+                          "sourceUrl": {
+                            "type": "string",
+                            "format": "uri"
+                          }
+                        },
+                        "required": [
+                          "key",
+                          "name",
+                          "field",
+                          "degree",
+                          "sourceStatus"
+                        ],
+                        "additionalProperties": false
+                      }
+                    },
+                    "dataYear": {
+                      "type": "integer",
+                      "minimum": 2000,
+                      "maximum": 2100
+                    },
+                    "sourceUrl": {
+                      "type": "string",
+                      "format": "uri"
+                    },
+                    "sourceStatus": {
+                      "type": "string",
+                      "enum": [
+                        "official",
+                        "verified",
+                        "demo",
+                        "unknown"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "provider",
+                    "name",
+                    "programs",
+                    "sourceStatus"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "required": [
+                "universityId",
+                "fitScore",
+                "components",
+                "reasonCodes",
+                "concerns",
+                "university"
+              ],
+              "additionalProperties": false
+            }
+          }
+        },
+        "required": [
+          "engineVersion",
+          "recommendations"
+        ],
+        "additionalProperties": false
+      },
+      "ExplanationRequest": {
+        "type": "object",
+        "properties": {
+          "profile": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+              },
+              "targetCountry": {
+                "type": "string",
+                "const": "US"
+              },
+              "targetDegree": {
+                "type": "string",
+                "const": "bachelor"
+              },
+              "targetField": {
+                "type": "string",
+                "enum": [
+                  "computer_science",
+                  "engineering",
+                  "business",
+                  "economics",
+                  "design",
+                  "other"
+                ]
+              },
+              "targetIntakeYear": {
+                "type": "integer",
+                "minimum": 2020,
+                "maximum": 2100
+              },
+              "gpaValue": {
+                "type": "number",
+                "minimum": 0
+              },
+              "gpaScale": {
+                "anyOf": [
+                  {
+                    "type": "number",
+                    "const": 4
+                  },
+                  {
+                    "type": "number",
+                    "const": 5
+                  },
+                  {
+                    "type": "number",
+                    "const": 10
+                  },
+                  {
+                    "type": "number",
+                    "const": 100
+                  }
+                ]
+              },
+              "englishExam": {
+                "type": "object",
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "IELTS",
+                      "TOEFL",
+                      "DUOLINGO"
+                    ]
+                  },
+                  "status": {
+                    "type": "string",
+                    "enum": [
+                      "not_planned",
+                      "planned",
+                      "taken"
+                    ]
+                  },
+                  "score": {
+                    "type": "number"
+                  }
+                },
+                "required": [
+                  "type",
+                  "status"
+                ],
+                "additionalProperties": false
+              },
+              "sat": {
+                "type": "object",
+                "properties": {
+                  "status": {
+                    "type": "string",
+                    "enum": [
+                      "not_planned",
+                      "planned",
+                      "taken"
+                    ]
+                  },
+                  "score": {
+                    "type": "integer",
+                    "minimum": 400,
+                    "maximum": 1600
+                  }
+                },
+                "required": [
+                  "status"
+                ],
+                "additionalProperties": false
+              },
+              "annualBudgetUsd": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "preferredStates": {
+                "maxItems": 10,
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "pattern": "^[A-Z]{2}$"
+                }
+              },
+              "campusSize": {
+                "type": "string",
+                "enum": [
+                  "small",
+                  "medium",
+                  "large",
+                  "any"
+                ]
+              }
+            },
+            "required": [
+              "targetCountry",
+              "targetDegree",
+              "targetField",
+              "targetIntakeYear",
+              "gpaValue",
+              "gpaScale",
+              "annualBudgetUsd"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "profile"
+        ],
+        "additionalProperties": false
+      },
+      "ExplanationResponse": {
+        "type": "object",
+        "properties": {
+          "universityId": {
+            "type": "string"
+          },
+          "engineVersion": {
+            "type": "string"
+          },
+          "explanation": {
+            "type": "object",
+            "properties": {
+              "summary": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 300
+              },
+              "reasons": {
+                "maxItems": 4,
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 300
+                }
+              },
+              "concerns": {
+                "maxItems": 4,
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 300
+                }
+              }
+            },
+            "required": [
+              "summary",
+              "reasons",
+              "concerns"
+            ],
+            "additionalProperties": false
+          },
+          "mode": {
+            "type": "string",
+            "enum": [
+              "rules",
+              "gemini"
+            ]
+          },
+          "promptVersion": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "universityId",
+          "engineVersion",
+          "explanation",
+          "mode"
+        ],
+        "additionalProperties": false
+      },
+      "ComparisonRequest": {
+        "type": "object",
+        "properties": {
+          "profile": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+              },
+              "targetCountry": {
+                "type": "string",
+                "const": "US"
+              },
+              "targetDegree": {
+                "type": "string",
+                "const": "bachelor"
+              },
+              "targetField": {
+                "type": "string",
+                "enum": [
+                  "computer_science",
+                  "engineering",
+                  "business",
+                  "economics",
+                  "design",
+                  "other"
+                ]
+              },
+              "targetIntakeYear": {
+                "type": "integer",
+                "minimum": 2020,
+                "maximum": 2100
+              },
+              "gpaValue": {
+                "type": "number",
+                "minimum": 0
+              },
+              "gpaScale": {
+                "anyOf": [
+                  {
+                    "type": "number",
+                    "const": 4
+                  },
+                  {
+                    "type": "number",
+                    "const": 5
+                  },
+                  {
+                    "type": "number",
+                    "const": 10
+                  },
+                  {
+                    "type": "number",
+                    "const": 100
+                  }
+                ]
+              },
+              "englishExam": {
+                "type": "object",
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "IELTS",
+                      "TOEFL",
+                      "DUOLINGO"
+                    ]
+                  },
+                  "status": {
+                    "type": "string",
+                    "enum": [
+                      "not_planned",
+                      "planned",
+                      "taken"
+                    ]
+                  },
+                  "score": {
+                    "type": "number"
+                  }
+                },
+                "required": [
+                  "type",
+                  "status"
+                ],
+                "additionalProperties": false
+              },
+              "sat": {
+                "type": "object",
+                "properties": {
+                  "status": {
+                    "type": "string",
+                    "enum": [
+                      "not_planned",
+                      "planned",
+                      "taken"
+                    ]
+                  },
+                  "score": {
+                    "type": "integer",
+                    "minimum": 400,
+                    "maximum": 1600
+                  }
+                },
+                "required": [
+                  "status"
+                ],
+                "additionalProperties": false
+              },
+              "annualBudgetUsd": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "preferredStates": {
+                "maxItems": 10,
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "pattern": "^[A-Z]{2}$"
+                }
+              },
+              "campusSize": {
+                "type": "string",
+                "enum": [
+                  "small",
+                  "medium",
+                  "large",
+                  "any"
+                ]
+              }
+            },
+            "required": [
+              "targetCountry",
+              "targetDegree",
+              "targetField",
+              "targetIntakeYear",
+              "gpaValue",
+              "gpaScale",
+              "annualBudgetUsd"
+            ],
+            "additionalProperties": false
+          },
+          "universityIds": {
+            "minItems": 2,
+            "maxItems": 3,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        },
+        "required": [
+          "profile",
+          "universityIds"
+        ],
+        "additionalProperties": false
+      },
+      "ComparisonResponse": {
+        "type": "object",
+        "properties": {
+          "engineVersion": {
+            "type": "string"
+          },
+          "comparisons": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "university": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "provider": {
+                      "type": "string",
+                      "enum": [
+                        "college_scorecard",
+                        "curated",
+                        "demo"
+                      ]
+                    },
+                    "name": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "city": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "state": {
+                      "type": "string",
+                      "pattern": "^[A-Z]{2}$"
+                    },
+                    "websiteUrl": {
+                      "type": "string",
+                      "format": "uri"
+                    },
+                    "studentSize": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 9007199254740991
+                    },
+                    "admissionRate": {
+                      "type": "number",
+                      "minimum": 0,
+                      "maximum": 1
+                    },
+                    "tuitionOutOfStateUsd": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 9007199254740991
+                    },
+                    "averageNetPriceUsd": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 9007199254740991
+                    },
+                    "satMedian": {
+                      "type": "integer",
+                      "minimum": 400,
+                      "maximum": 1600
+                    },
+                    "programs": {
+                      "minItems": 1,
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "key": {
+                            "type": "string",
+                            "minLength": 1
+                          },
+                          "name": {
+                            "type": "string",
+                            "minLength": 1
+                          },
+                          "field": {
+                            "type": "string",
+                            "enum": [
+                              "computer_science",
+                              "engineering",
+                              "business",
+                              "economics",
+                              "design",
+                              "other"
+                            ]
+                          },
+                          "degree": {
+                            "type": "string",
+                            "const": "bachelor"
+                          },
+                          "sourceStatus": {
+                            "type": "string",
+                            "enum": [
+                              "official",
+                              "verified",
+                              "demo",
+                              "unknown"
+                            ]
+                          },
+                          "sourceUrl": {
+                            "type": "string",
+                            "format": "uri"
+                          }
+                        },
+                        "required": [
+                          "key",
+                          "name",
+                          "field",
+                          "degree",
+                          "sourceStatus"
+                        ],
+                        "additionalProperties": false
+                      }
+                    },
+                    "dataYear": {
+                      "type": "integer",
+                      "minimum": 2000,
+                      "maximum": 2100
+                    },
+                    "sourceUrl": {
+                      "type": "string",
+                      "format": "uri"
+                    },
+                    "sourceStatus": {
+                      "type": "string",
+                      "enum": [
+                        "official",
+                        "verified",
+                        "demo",
+                        "unknown"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "provider",
+                    "name",
+                    "programs",
+                    "sourceStatus"
+                  ],
+                  "additionalProperties": false
+                },
+                "recommendation": {
+                  "anyOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "universityId": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "fitScore": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 100
+                        },
+                        "components": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "key": {
+                                "type": "string",
+                                "enum": [
+                                  "academic",
+                                  "program",
+                                  "budget",
+                                  "preferences"
+                                ]
+                              },
+                              "score": {
+                                "type": "integer",
+                                "minimum": 0,
+                                "maximum": 9007199254740991
+                              },
+                              "maxScore": {
+                                "type": "integer",
+                                "minimum": 0,
+                                "maximum": 9007199254740991
+                              },
+                              "reasons": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                }
+                              }
+                            },
+                            "required": [
+                              "key",
+                              "score",
+                              "maxScore",
+                              "reasons"
+                            ],
+                            "additionalProperties": false
+                          }
+                        },
+                        "reasonCodes": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        "concerns": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "code": {
+                                "type": "string"
+                              },
+                              "message": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "code",
+                              "message"
+                            ],
+                            "additionalProperties": false
+                          }
+                        },
+                        "explanation": {
+                          "type": "object",
+                          "properties": {
+                            "summary": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 300
+                            },
+                            "reasons": {
+                              "maxItems": 4,
+                              "type": "array",
+                              "items": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 300
+                              }
+                            },
+                            "concerns": {
+                              "maxItems": 4,
+                              "type": "array",
+                              "items": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 300
+                              }
+                            }
+                          },
+                          "required": [
+                            "summary",
+                            "reasons",
+                            "concerns"
+                          ],
+                          "additionalProperties": false
+                        }
+                      },
+                      "required": [
+                        "universityId",
+                        "fitScore",
+                        "components",
+                        "reasonCodes",
+                        "concerns"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "requirements": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "universityId": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "programKey": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "kind": {
+                        "type": "string",
+                        "enum": [
+                          "application_deadline",
+                          "english",
+                          "sat_act",
+                          "document",
+                          "gpa",
+                          "other"
+                        ]
+                      },
+                      "label": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "valueText": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "numericValue": {
+                        "type": "number"
+                      },
+                      "date": {
+                        "type": "string",
+                        "format": "date",
+                        "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+                      },
+                      "sourceUrl": {
+                        "type": "string",
+                        "format": "uri"
+                      },
+                      "sourceTitle": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "sourceStatus": {
+                        "type": "string",
+                        "enum": [
+                          "official",
+                          "verified",
+                          "demo",
+                          "unknown"
+                        ]
+                      },
+                      "checkedAt": {
+                        "type": "string",
+                        "format": "date-time",
+                        "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "universityId",
+                      "kind",
+                      "label",
+                      "valueText",
+                      "sourceStatus"
+                    ],
+                    "additionalProperties": false
+                  }
+                },
+                "requirementsStatus": {
+                  "type": "string",
+                  "enum": [
+                    "reported",
+                    "unknown"
+                  ]
+                }
+              },
+              "required": [
+                "university",
+                "recommendation",
+                "requirements",
+                "requirementsStatus"
+              ],
+              "additionalProperties": false
+            }
+          }
+        },
+        "required": [
+          "engineVersion",
+          "comparisons"
+        ],
+        "additionalProperties": false
+      },
+      "RoadmapRequest": {
+        "type": "object",
+        "properties": {
+          "profile": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+              },
+              "targetCountry": {
+                "type": "string",
+                "const": "US"
+              },
+              "targetDegree": {
+                "type": "string",
+                "const": "bachelor"
+              },
+              "targetField": {
+                "type": "string",
+                "enum": [
+                  "computer_science",
+                  "engineering",
+                  "business",
+                  "economics",
+                  "design",
+                  "other"
+                ]
+              },
+              "targetIntakeYear": {
+                "type": "integer",
+                "minimum": 2020,
+                "maximum": 2100
+              },
+              "gpaValue": {
+                "type": "number",
+                "minimum": 0
+              },
+              "gpaScale": {
+                "anyOf": [
+                  {
+                    "type": "number",
+                    "const": 4
+                  },
+                  {
+                    "type": "number",
+                    "const": 5
+                  },
+                  {
+                    "type": "number",
+                    "const": 10
+                  },
+                  {
+                    "type": "number",
+                    "const": 100
+                  }
+                ]
+              },
+              "englishExam": {
+                "type": "object",
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "IELTS",
+                      "TOEFL",
+                      "DUOLINGO"
+                    ]
+                  },
+                  "status": {
+                    "type": "string",
+                    "enum": [
+                      "not_planned",
+                      "planned",
+                      "taken"
+                    ]
+                  },
+                  "score": {
+                    "type": "number"
+                  }
+                },
+                "required": [
+                  "type",
+                  "status"
+                ],
+                "additionalProperties": false
+              },
+              "sat": {
+                "type": "object",
+                "properties": {
+                  "status": {
+                    "type": "string",
+                    "enum": [
+                      "not_planned",
+                      "planned",
+                      "taken"
+                    ]
+                  },
+                  "score": {
+                    "type": "integer",
+                    "minimum": 400,
+                    "maximum": 1600
+                  }
+                },
+                "required": [
+                  "status"
+                ],
+                "additionalProperties": false
+              },
+              "annualBudgetUsd": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "preferredStates": {
+                "maxItems": 10,
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "pattern": "^[A-Z]{2}$"
+                }
+              },
+              "campusSize": {
+                "type": "string",
+                "enum": [
+                  "small",
+                  "medium",
+                  "large",
+                  "any"
+                ]
+              }
+            },
+            "required": [
+              "targetCountry",
+              "targetDegree",
+              "targetField",
+              "targetIntakeYear",
+              "gpaValue",
+              "gpaScale",
+              "annualBudgetUsd"
+            ],
+            "additionalProperties": false
+          },
+          "selectedUniversityIds": {
+            "minItems": 1,
+            "maxItems": 3,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "enhanceWithAi": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "profile",
+          "selectedUniversityIds"
+        ],
+        "additionalProperties": false
+      },
+      "RoadmapResponse": {
+        "type": "object",
+        "properties": {
+          "roadmap": {
+            "type": "object",
+            "properties": {
+              "rulesVersion": {
+                "type": "string",
+                "minLength": 1
+              },
+              "items": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "title": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "description": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "category": {
+                      "type": "string",
+                      "enum": [
+                        "exam",
+                        "document",
+                        "application",
+                        "academic",
+                        "activity",
+                        "research"
+                      ]
+                    },
+                    "dueDate": {
+                      "type": "string",
+                      "format": "date",
+                      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+                    },
+                    "priority": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 9007199254740991
+                    },
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "pending",
+                        "in_progress",
+                        "done",
+                        "blocked"
+                      ]
+                    },
+                    "dependsOnIds": {
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "minLength": 1
+                      }
+                    },
+                    "sourceUrl": {
+                      "type": "string",
+                      "format": "uri"
+                    },
+                    "sourceStatus": {
+                      "type": "string",
+                      "enum": [
+                        "official",
+                        "verified",
+                        "demo",
+                        "unknown"
+                      ]
+                    },
+                    "isNextAction": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "title",
+                    "category",
+                    "priority",
+                    "status",
+                    "dependsOnIds",
+                    "isNextAction"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "nextActionId": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            },
+            "required": [
+              "rulesVersion",
+              "items",
+              "nextActionId"
+            ],
+            "additionalProperties": false
+          },
+          "sourceCoverage": {
+            "type": "object",
+            "properties": {
+              "official": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "verified": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "demo": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "unknown": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              }
+            },
+            "required": [
+              "official",
+              "verified",
+              "demo",
+              "unknown"
+            ],
+            "additionalProperties": false
+          },
+          "mode": {
+            "type": "string",
+            "enum": [
+              "rules",
+              "gemini"
+            ]
+          },
+          "promptVersion": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "roadmap",
+          "sourceCoverage",
+          "mode"
+        ],
+        "additionalProperties": false
+      },
+      "SaveProfileRequest": {
+        "type": "object",
+        "properties": {
+          "profile": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+              },
+              "targetCountry": {
+                "type": "string",
+                "const": "US"
+              },
+              "targetDegree": {
+                "type": "string",
+                "const": "bachelor"
+              },
+              "targetField": {
+                "type": "string",
+                "enum": [
+                  "computer_science",
+                  "engineering",
+                  "business",
+                  "economics",
+                  "design",
+                  "other"
+                ]
+              },
+              "targetIntakeYear": {
+                "type": "integer",
+                "minimum": 2020,
+                "maximum": 2100
+              },
+              "gpaValue": {
+                "type": "number",
+                "minimum": 0
+              },
+              "gpaScale": {
+                "anyOf": [
+                  {
+                    "type": "number",
+                    "const": 4
+                  },
+                  {
+                    "type": "number",
+                    "const": 5
+                  },
+                  {
+                    "type": "number",
+                    "const": 10
+                  },
+                  {
+                    "type": "number",
+                    "const": 100
+                  }
+                ]
+              },
+              "englishExam": {
+                "type": "object",
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "IELTS",
+                      "TOEFL",
+                      "DUOLINGO"
+                    ]
+                  },
+                  "status": {
+                    "type": "string",
+                    "enum": [
+                      "not_planned",
+                      "planned",
+                      "taken"
+                    ]
+                  },
+                  "score": {
+                    "type": "number"
+                  }
+                },
+                "required": [
+                  "type",
+                  "status"
+                ],
+                "additionalProperties": false
+              },
+              "sat": {
+                "type": "object",
+                "properties": {
+                  "status": {
+                    "type": "string",
+                    "enum": [
+                      "not_planned",
+                      "planned",
+                      "taken"
+                    ]
+                  },
+                  "score": {
+                    "type": "integer",
+                    "minimum": 400,
+                    "maximum": 1600
+                  }
+                },
+                "required": [
+                  "status"
+                ],
+                "additionalProperties": false
+              },
+              "annualBudgetUsd": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "preferredStates": {
+                "maxItems": 10,
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "pattern": "^[A-Z]{2}$"
+                }
+              },
+              "campusSize": {
+                "type": "string",
+                "enum": [
+                  "small",
+                  "medium",
+                  "large",
+                  "any"
+                ]
+              }
+            },
+            "required": [
+              "targetCountry",
+              "targetDegree",
+              "targetField",
+              "targetIntakeYear",
+              "gpaValue",
+              "gpaScale",
+              "annualBudgetUsd"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "profile"
+        ],
+        "additionalProperties": false
+      },
+      "RecalculateRequest": {
+        "type": "object",
+        "properties": {
+          "profile": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+              },
+              "targetCountry": {
+                "type": "string",
+                "const": "US"
+              },
+              "targetDegree": {
+                "type": "string",
+                "const": "bachelor"
+              },
+              "targetField": {
+                "type": "string",
+                "enum": [
+                  "computer_science",
+                  "engineering",
+                  "business",
+                  "economics",
+                  "design",
+                  "other"
+                ]
+              },
+              "targetIntakeYear": {
+                "type": "integer",
+                "minimum": 2020,
+                "maximum": 2100
+              },
+              "gpaValue": {
+                "type": "number",
+                "minimum": 0
+              },
+              "gpaScale": {
+                "anyOf": [
+                  {
+                    "type": "number",
+                    "const": 4
+                  },
+                  {
+                    "type": "number",
+                    "const": 5
+                  },
+                  {
+                    "type": "number",
+                    "const": 10
+                  },
+                  {
+                    "type": "number",
+                    "const": 100
+                  }
+                ]
+              },
+              "englishExam": {
+                "type": "object",
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "IELTS",
+                      "TOEFL",
+                      "DUOLINGO"
+                    ]
+                  },
+                  "status": {
+                    "type": "string",
+                    "enum": [
+                      "not_planned",
+                      "planned",
+                      "taken"
+                    ]
+                  },
+                  "score": {
+                    "type": "number"
+                  }
+                },
+                "required": [
+                  "type",
+                  "status"
+                ],
+                "additionalProperties": false
+              },
+              "sat": {
+                "type": "object",
+                "properties": {
+                  "status": {
+                    "type": "string",
+                    "enum": [
+                      "not_planned",
+                      "planned",
+                      "taken"
+                    ]
+                  },
+                  "score": {
+                    "type": "integer",
+                    "minimum": 400,
+                    "maximum": 1600
+                  }
+                },
+                "required": [
+                  "status"
+                ],
+                "additionalProperties": false
+              },
+              "annualBudgetUsd": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "preferredStates": {
+                "maxItems": 10,
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "pattern": "^[A-Z]{2}$"
+                }
+              },
+              "campusSize": {
+                "type": "string",
+                "enum": [
+                  "small",
+                  "medium",
+                  "large",
+                  "any"
+                ]
+              }
+            },
+            "required": [
+              "id",
+              "targetCountry",
+              "targetDegree",
+              "targetField",
+              "targetIntakeYear",
+              "gpaValue",
+              "gpaScale",
+              "annualBudgetUsd"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "profile"
+        ],
+        "additionalProperties": false
+      },
+      "StatusRequest": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "pending",
+              "in_progress",
+              "done",
+              "blocked"
+            ]
+          }
+        },
+        "required": [
+          "status"
+        ],
+        "additionalProperties": false
+      },
+      "PersistedPlanResponse": {
+        "type": "object",
+        "properties": {
+          "profile": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+              },
+              "targetCountry": {
+                "type": "string",
+                "const": "US"
+              },
+              "targetDegree": {
+                "type": "string",
+                "const": "bachelor"
+              },
+              "targetField": {
+                "type": "string",
+                "enum": [
+                  "computer_science",
+                  "engineering",
+                  "business",
+                  "economics",
+                  "design",
+                  "other"
+                ]
+              },
+              "targetIntakeYear": {
+                "type": "integer",
+                "minimum": 2020,
+                "maximum": 2100
+              },
+              "gpaValue": {
+                "type": "number",
+                "minimum": 0
+              },
+              "gpaScale": {
+                "anyOf": [
+                  {
+                    "type": "number",
+                    "const": 4
+                  },
+                  {
+                    "type": "number",
+                    "const": 5
+                  },
+                  {
+                    "type": "number",
+                    "const": 10
+                  },
+                  {
+                    "type": "number",
+                    "const": 100
+                  }
+                ]
+              },
+              "englishExam": {
+                "type": "object",
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "IELTS",
+                      "TOEFL",
+                      "DUOLINGO"
+                    ]
+                  },
+                  "status": {
+                    "type": "string",
+                    "enum": [
+                      "not_planned",
+                      "planned",
+                      "taken"
+                    ]
+                  },
+                  "score": {
+                    "type": "number"
+                  }
+                },
+                "required": [
+                  "type",
+                  "status"
+                ],
+                "additionalProperties": false
+              },
+              "sat": {
+                "type": "object",
+                "properties": {
+                  "status": {
+                    "type": "string",
+                    "enum": [
+                      "not_planned",
+                      "planned",
+                      "taken"
+                    ]
+                  },
+                  "score": {
+                    "type": "integer",
+                    "minimum": 400,
+                    "maximum": 1600
+                  }
+                },
+                "required": [
+                  "status"
+                ],
+                "additionalProperties": false
+              },
+              "annualBudgetUsd": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "preferredStates": {
+                "maxItems": 10,
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "pattern": "^[A-Z]{2}$"
+                }
+              },
+              "campusSize": {
+                "type": "string",
+                "enum": [
+                  "small",
+                  "medium",
+                  "large",
+                  "any"
+                ]
+              }
+            },
+            "required": [
+              "id",
+              "targetCountry",
+              "targetDegree",
+              "targetField",
+              "targetIntakeYear",
+              "gpaValue",
+              "gpaScale",
+              "annualBudgetUsd"
+            ],
+            "additionalProperties": false
+          },
+          "profileHash": {
+            "type": "string"
+          },
+          "recommendationRun": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+              },
+              "engineVersion": {
+                "type": "string"
+              },
+              "recommendations": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "universityId": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "fitScore": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 100
+                    },
+                    "components": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "key": {
+                            "type": "string",
+                            "enum": [
+                              "academic",
+                              "program",
+                              "budget",
+                              "preferences"
+                            ]
+                          },
+                          "score": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "maximum": 9007199254740991
+                          },
+                          "maxScore": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "maximum": 9007199254740991
+                          },
+                          "reasons": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          }
+                        },
+                        "required": [
+                          "key",
+                          "score",
+                          "maxScore",
+                          "reasons"
+                        ],
+                        "additionalProperties": false
+                      }
+                    },
+                    "reasonCodes": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "concerns": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "code": {
+                            "type": "string"
+                          },
+                          "message": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "code",
+                          "message"
+                        ],
+                        "additionalProperties": false
+                      }
+                    },
+                    "explanation": {
+                      "type": "object",
+                      "properties": {
+                        "summary": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 300
+                        },
+                        "reasons": {
+                          "maxItems": 4,
+                          "type": "array",
+                          "items": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 300
+                          }
+                        },
+                        "concerns": {
+                          "maxItems": 4,
+                          "type": "array",
+                          "items": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 300
+                          }
+                        }
+                      },
+                      "required": [
+                        "summary",
+                        "reasons",
+                        "concerns"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "university": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "provider": {
+                          "type": "string",
+                          "enum": [
+                            "college_scorecard",
+                            "curated",
+                            "demo"
+                          ]
+                        },
+                        "name": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "city": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "state": {
+                          "type": "string",
+                          "pattern": "^[A-Z]{2}$"
+                        },
+                        "websiteUrl": {
+                          "type": "string",
+                          "format": "uri"
+                        },
+                        "studentSize": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 9007199254740991
+                        },
+                        "admissionRate": {
+                          "type": "number",
+                          "minimum": 0,
+                          "maximum": 1
+                        },
+                        "tuitionOutOfStateUsd": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 9007199254740991
+                        },
+                        "averageNetPriceUsd": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 9007199254740991
+                        },
+                        "satMedian": {
+                          "type": "integer",
+                          "minimum": 400,
+                          "maximum": 1600
+                        },
+                        "programs": {
+                          "minItems": 1,
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "key": {
+                                "type": "string",
+                                "minLength": 1
+                              },
+                              "name": {
+                                "type": "string",
+                                "minLength": 1
+                              },
+                              "field": {
+                                "type": "string",
+                                "enum": [
+                                  "computer_science",
+                                  "engineering",
+                                  "business",
+                                  "economics",
+                                  "design",
+                                  "other"
+                                ]
+                              },
+                              "degree": {
+                                "type": "string",
+                                "const": "bachelor"
+                              },
+                              "sourceStatus": {
+                                "type": "string",
+                                "enum": [
+                                  "official",
+                                  "verified",
+                                  "demo",
+                                  "unknown"
+                                ]
+                              },
+                              "sourceUrl": {
+                                "type": "string",
+                                "format": "uri"
+                              }
+                            },
+                            "required": [
+                              "key",
+                              "name",
+                              "field",
+                              "degree",
+                              "sourceStatus"
+                            ],
+                            "additionalProperties": false
+                          }
+                        },
+                        "dataYear": {
+                          "type": "integer",
+                          "minimum": 2000,
+                          "maximum": 2100
+                        },
+                        "sourceUrl": {
+                          "type": "string",
+                          "format": "uri"
+                        },
+                        "sourceStatus": {
+                          "type": "string",
+                          "enum": [
+                            "official",
+                            "verified",
+                            "demo",
+                            "unknown"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "provider",
+                        "name",
+                        "programs",
+                        "sourceStatus"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "universityId",
+                    "fitScore",
+                    "components",
+                    "reasonCodes",
+                    "concerns",
+                    "university"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "promptVersions": {
+                "type": "object",
+                "properties": {
+                  "diagnosis": {
+                    "type": "string"
+                  },
+                  "recommendationExplanation": {
+                    "type": "string"
+                  },
+                  "roadmap": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "diagnosis",
+                  "recommendationExplanation",
+                  "roadmap"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "id",
+              "engineVersion",
+              "recommendations"
+            ],
+            "additionalProperties": false
+          },
+          "roadmap": {
+            "type": "object",
+            "properties": {
+              "rulesVersion": {
+                "type": "string",
+                "minLength": 1
+              },
+              "items": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "title": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "description": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "category": {
+                      "type": "string",
+                      "enum": [
+                        "exam",
+                        "document",
+                        "application",
+                        "academic",
+                        "activity",
+                        "research"
+                      ]
+                    },
+                    "dueDate": {
+                      "type": "string",
+                      "format": "date",
+                      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+                    },
+                    "priority": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 9007199254740991
+                    },
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "pending",
+                        "in_progress",
+                        "done",
+                        "blocked"
+                      ]
+                    },
+                    "dependsOnIds": {
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "minLength": 1
+                      }
+                    },
+                    "sourceUrl": {
+                      "type": "string",
+                      "format": "uri"
+                    },
+                    "sourceStatus": {
+                      "type": "string",
+                      "enum": [
+                        "official",
+                        "verified",
+                        "demo",
+                        "unknown"
+                      ]
+                    },
+                    "isNextAction": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "title",
+                    "category",
+                    "priority",
+                    "status",
+                    "dependsOnIds",
+                    "isNextAction"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "nextActionId": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "id": {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+              },
+              "selectedUniversityIds": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            },
+            "required": [
+              "rulesVersion",
+              "items",
+              "nextActionId",
+              "id",
+              "selectedUniversityIds"
+            ],
+            "additionalProperties": false
+          },
+          "sourceCoverage": {
+            "type": "object",
+            "properties": {
+              "official": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "verified": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "demo": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "unknown": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              }
+            },
+            "required": [
+              "official",
+              "verified",
+              "demo",
+              "unknown"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "profile",
+          "profileHash",
+          "recommendationRun",
+          "roadmap",
+          "sourceCoverage"
+        ],
+        "additionalProperties": false
+      },
+      "UpdateRoadmapItemResponse": {
+        "type": "object",
+        "properties": {
+          "roadmap": {
+            "type": "object",
+            "properties": {
+              "rulesVersion": {
+                "type": "string",
+                "minLength": 1
+              },
+              "items": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "title": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "description": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "category": {
+                      "type": "string",
+                      "enum": [
+                        "exam",
+                        "document",
+                        "application",
+                        "academic",
+                        "activity",
+                        "research"
+                      ]
+                    },
+                    "dueDate": {
+                      "type": "string",
+                      "format": "date",
+                      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+                    },
+                    "priority": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 9007199254740991
+                    },
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "pending",
+                        "in_progress",
+                        "done",
+                        "blocked"
+                      ]
+                    },
+                    "dependsOnIds": {
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "minLength": 1
+                      }
+                    },
+                    "sourceUrl": {
+                      "type": "string",
+                      "format": "uri"
+                    },
+                    "sourceStatus": {
+                      "type": "string",
+                      "enum": [
+                        "official",
+                        "verified",
+                        "demo",
+                        "unknown"
+                      ]
+                    },
+                    "isNextAction": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "title",
+                    "category",
+                    "priority",
+                    "status",
+                    "dependsOnIds",
+                    "isNextAction"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "nextActionId": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "id": {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+              },
+              "selectedUniversityIds": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            },
+            "required": [
+              "rulesVersion",
+              "items",
+              "nextActionId",
+              "id",
+              "selectedUniversityIds"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "roadmap"
+        ],
+        "additionalProperties": false
+      }
+    }
+  },
+  "paths": {
+    "/api/health": {
+      "get": {
+        "operationId": "getHealth",
+        "summary": "Liveness",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HealthResponse"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Unexpected error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/ready": {
+      "get": {
+        "operationId": "getReady",
+        "summary": "Database readiness",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReadyResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Unexpected error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/diagnosis": {
+      "post": {
+        "operationId": "createDiagnosis",
+        "summary": "Diagnose a profile",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DiagnosisRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DiagnosisResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Unexpected error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/recommendations": {
+      "post": {
+        "operationId": "createRecommendations",
+        "summary": "Rank universities",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RecommendationsRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecommendationsResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Unexpected error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/recommendations/{universityId}/explanation": {
+      "post": {
+        "operationId": "explainRecommendation",
+        "summary": "Explain one recommendation",
+        "parameters": [
+          {
+            "name": "universityId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ExplanationRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExplanationResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Unexpected error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/comparison": {
+      "post": {
+        "operationId": "compareUniversities",
+        "summary": "Compare two or three universities",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ComparisonRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ComparisonResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Unexpected error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/roadmap": {
+      "post": {
+        "operationId": "createRoadmap",
+        "summary": "Build a roadmap",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RoadmapRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RoadmapResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Unexpected error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/profile": {
+      "put": {
+        "operationId": "saveProfile",
+        "summary": "Save a profile and plan",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SaveProfileRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PersistedPlanResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Unexpected error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/plan/{profileId}": {
+      "get": {
+        "operationId": "getPlan",
+        "summary": "Read the current saved plan",
+        "parameters": [
+          {
+            "name": "profileId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PersistedPlanResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Unexpected error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/plan/recalculate": {
+      "post": {
+        "operationId": "recalculatePlan",
+        "summary": "Recalculate a saved plan",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RecalculateRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PersistedPlanResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Unexpected error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/roadmaps/{roadmapId}/items/{itemId}": {
+      "patch": {
+        "operationId": "updateRoadmapItem",
+        "summary": "Update one roadmap item status",
+        "parameters": [
+          {
+            "name": "roadmapId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+            }
+          },
+          {
+            "name": "itemId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StatusRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UpdateRoadmapItemResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Unexpected error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

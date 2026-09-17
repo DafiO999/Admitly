@@ -10,6 +10,7 @@
     "postinstall": "prisma generate",
     "dev": "tsx watch src/server.ts",
     "build": "tsc -p tsconfig.build.json",
+    "api:generate": "tsx scripts/generate-openapi.ts",
     "start": "node dist/server.js",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",

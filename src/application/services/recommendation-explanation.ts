@@ -10,7 +10,7 @@ import {
 import { RECOMMENDATION_ENGINE_VERSION, RECOMMENDATION_EXPLANATION_PROMPT_VERSION } from '../../domain/versions.js';
 import { universitySchema } from '../../domain/university/schema.js';
 
-const explanationRequestSchema = z.object({ profile: studentProfileSchema }).strict();
+export const explanationRequestSchema = z.object({ profile: studentProfileSchema }).strict();
 
 export class RecommendationNotFoundError extends Error {
   constructor() {
