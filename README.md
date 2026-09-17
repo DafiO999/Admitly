@@ -1,16 +1,30 @@
 # Admitly backend
 
-Fastify and TypeScript service for the admission journey project. Milestone 1
-provides the HTTP foundation and a health endpoint; database and business APIs
+Fastify and TypeScript service for the admission journey project. PostgreSQL
+and Prisma are available for local development; domain tables and business APIs
 arrive in later milestones.
 
 ## Local run
 
-Requires Node.js 20 or newer. Install dependencies with `pnpm install`, copy
-`.env.example` to `.env`, then run `pnpm dev`. The default server listens on
-`127.0.0.1:3001`; `GET /api/health` returns `{"status":"ok"}`.
+Requires Node.js 20 or newer and Docker with Compose. Run:
+
+```text
+pnpm install
+docker compose -f compose.dev.yml up -d db
+```
+
+Copy `.env.example` to `.env`, then run `pnpm db:migrate`, `pnpm db:check`, and
+`pnpm dev`. The backend runs on the host, while Docker runs PostgreSQL. The
+default server listens on `127.0.0.1:3001`; `GET /api/health` returns
+`{"status":"ok"}`. Dependency installation generates Prisma Client; run
+`pnpm db:generate` after schema edits.
 
 The same package scripts work with npm (`npm run dev`, `npm run build`, etc.).
-Run `pnpm lint`, `pnpm typecheck`, `pnpm test`, `pnpm build`, and
-`pnpm test:integration` to check the foundation. `pnpm start` runs compiled
-JavaScript after a build.
+Run `pnpm lint`, `pnpm typecheck`, `pnpm test`, and `pnpm build` for normal
+checks. `pnpm start` runs compiled JavaScript after a build.
+
+`TEST_DATABASE_URL` in `.env.example` uses the dedicated `admitly_test` schema.
+Apply migrations to that schema before `pnpm test:integration`, for example by
+temporarily setting `DATABASE_URL` to the `TEST_DATABASE_URL` value and running
+`pnpm exec prisma migrate deploy`. The integration test accepts only a local
+`admitly` database and the `admitly_test` schema; it never resets a database.

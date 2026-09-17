@@ -1,0 +1,1 @@
+-- Baseline migration. Domain tables are introduced in milestone 3.

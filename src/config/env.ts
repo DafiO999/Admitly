@@ -18,6 +18,7 @@ const environmentSchema = z.object({
   PORT: z.coerce.number().int().min(1).max(65535).default(3001),
   DEMO_DATA_MODE: z.enum(['true', 'false']).default('true').transform((value) => value === 'true'),
   DATABASE_URL: optionalDatabaseUrl,
+  TEST_DATABASE_URL: optionalDatabaseUrl,
   GEMINI_API_KEY: optionalString,
   GEMINI_MODEL: optionalString,
   COLLEGE_SCORECARD_API_KEY: optionalString,
