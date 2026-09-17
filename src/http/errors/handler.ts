@@ -3,6 +3,7 @@ import { ZodError } from 'zod';
 import { UniversityProviderError } from '../../application/ports/university-provider.js';
 import { ComparisonUniversityNotFoundError } from '../../application/services/comparison.js';
 import { RecommendationNotFoundError } from '../../application/services/recommendation-explanation.js';
+import { RoadmapProgramMismatchError, RoadmapUniversityNotFoundError } from '../../application/services/roadmap.js';
 
 type ErrorCode = 'VALIDATION' | 'NOT_FOUND' | 'EXTERNAL_UNAVAILABLE' | 'INTERNAL';
 
@@ -28,8 +29,13 @@ export function registerErrorHandlers(app: FastifyInstance): void {
         .send(errorResponse('EXTERNAL_UNAVAILABLE', 'University data unavailable'));
     }
 
-    if (error instanceof ComparisonUniversityNotFoundError || error instanceof RecommendationNotFoundError) {
+    if (error instanceof ComparisonUniversityNotFoundError || error instanceof RecommendationNotFoundError
+      || error instanceof RoadmapUniversityNotFoundError) {
       return reply.status(404).send(errorResponse('NOT_FOUND', 'Not found'));
+    }
+
+    if (error instanceof RoadmapProgramMismatchError) {
+      return reply.status(422).send(errorResponse('VALIDATION', 'Selected university has no matching bachelor program'));
     }
 
     if (statusCode === 404) {

@@ -74,4 +74,16 @@ describe('Gemini AI provider', () => {
     expect(createAiProvider({ GEMINI_API_KEY: undefined, GEMINI_MODEL: undefined })).toBeNull();
     expect(() => new GeminiAiProvider({ apiKey: 'private-key', model: '../bad' })).toThrow(AiProviderError);
   });
+
+  it('requests structured roadmap wording and rejects malformed items', async () => {
+    const items = [{ id: 'research:programs', title: 'Review selected bachelor programs' }];
+    const fetcher = vi.fn<typeof fetch>().mockResolvedValueOnce(geminiResponse({ items }))
+      .mockResolvedValueOnce(geminiResponse({ items: [{ id: 'research:programs', title: 'Fine', dueDate: '2028-01-01' }] }));
+    const provider = new GeminiAiProvider({ apiKey: 'private-key', model: 'gemini-3.8-flash', fetcher });
+    expect(await provider.rewriteRoadmap(items)).toEqual(items);
+    const body = JSON.parse(String(fetcher.mock.calls[0]![1]?.body));
+    expect(body.generationConfig.responseSchema.required).toEqual(['items']);
+    expect(body.contents[0].parts[0].text).toContain('Roadmap wording prompt version 1.0.0');
+    await expect(provider.rewriteRoadmap(items)).rejects.toMatchObject({ code: 'INVALID_RESPONSE' });
+  });
 });

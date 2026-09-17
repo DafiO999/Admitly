@@ -8,9 +8,16 @@ export interface RecommendationAiInput {
   concerns: string[];
 }
 
+export interface RoadmapAiItem {
+  id: string;
+  title: string;
+  description?: string;
+}
+
 export interface AiProvider {
   enhanceDiagnosis(diagnosis: Diagnosis): Promise<Diagnosis>;
   explainRecommendation(input: RecommendationAiInput): Promise<RecommendationExplanation>;
+  rewriteRoadmap(items: RoadmapAiItem[]): Promise<RoadmapAiItem[]>;
 }
 
 export type AiProviderErrorCode = 'TIMEOUT' | 'UNAVAILABLE' | 'INVALID_RESPONSE' | 'CONFIGURATION';

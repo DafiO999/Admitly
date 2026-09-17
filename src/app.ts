@@ -8,6 +8,7 @@ import { comparisonRoutes } from './http/routes/comparison.js';
 import { diagnosisRoutes } from './http/routes/diagnosis.js';
 import { healthRoutes } from './http/routes/health.js';
 import { recommendationRoutes } from './http/routes/recommendations.js';
+import { roadmapRoutes } from './http/routes/roadmap.js';
 import { createAdmissionRequirementProvider } from './infrastructure/admission-requirement-provider.js';
 import { createAiProvider } from './infrastructure/ai-provider.js';
 import { createUniversityProvider } from './infrastructure/university-provider.js';
@@ -30,7 +31,7 @@ export function buildApp(
     () => dependencies.universityProvider ?? createUniversityProvider(loadEnvironment(process.env)),
     aiProviderFactory,
   ));
-  app.register(comparisonRoutes(() => {
+  const providerFactory = () => {
     if (dependencies.universityProvider && dependencies.requirementProvider) {
       return { universityProvider: dependencies.universityProvider, requirementProvider: dependencies.requirementProvider };
     }
@@ -39,6 +40,8 @@ export function buildApp(
       universityProvider: dependencies.universityProvider ?? createUniversityProvider(environment),
       requirementProvider: dependencies.requirementProvider ?? createAdmissionRequirementProvider(environment),
     };
-  }));
+  };
+  app.register(comparisonRoutes(providerFactory));
+  app.register(roadmapRoutes(providerFactory, aiProviderFactory));
   return app;
 }

@@ -19,6 +19,7 @@ function aiProvider(overrides: Partial<AiProvider> = {}): AiProvider {
       reasons: ['A reported bachelor program matches the target field.'],
       concerns: ['Verify admissions requirements directly with the university.'],
     }),
+    rewriteRoadmap: async (items) => items,
     ...overrides,
   };
 }

@@ -12,6 +12,11 @@ Set `GEMINI_API_KEY` to enable optional Gemini wording. Pass
 `POST /api/recommendations/:universityId/explanation` with a profile. Both
 paths fall back to deterministic wording when Gemini is unavailable; ranking
 and fit scores remain rule-based.
+`POST /api/roadmap` builds preparation and application tasks for 1–3 selected
+universities. It copies known application dates with their source metadata,
+reports source coverage, and marks one available next action. An optional
+`enhanceWithAi: true` rewrites generic task wording; the task facts stay
+deterministic.
 
 ## Local run
 

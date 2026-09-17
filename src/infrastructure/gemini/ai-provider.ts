@@ -1,9 +1,11 @@
 import { z } from 'zod';
-import { AiProviderError, type AiProvider, type RecommendationAiInput } from '../../application/ports/ai-provider.js';
+import {
+  AiProviderError, type AiProvider, type RecommendationAiInput, type RoadmapAiItem,
+} from '../../application/ports/ai-provider.js';
 import { aiDiagnosisOutputSchema, type Diagnosis } from '../../domain/diagnosis/schema.js';
 import { recommendationExplanationSchema, type RecommendationExplanation } from '../../domain/recommendation/schema.js';
 import {
-  DIAGNOSIS_PROMPT_VERSION, RECOMMENDATION_EXPLANATION_PROMPT_VERSION,
+  DIAGNOSIS_PROMPT_VERSION, RECOMMENDATION_EXPLANATION_PROMPT_VERSION, ROADMAP_PROMPT_VERSION,
 } from '../../domain/versions.js';
 
 const responseSchema = z.object({
@@ -34,6 +36,26 @@ const explanationJsonSchema = {
   },
   required: ['summary', 'reasons', 'concerns'],
 };
+
+const roadmapJsonSchema = {
+  type: 'object',
+  properties: {
+    items: { type: 'array', items: {
+      type: 'object',
+      properties: { id: { type: 'string' }, title: { type: 'string' }, description: { type: 'string' } },
+      required: ['id', 'title'],
+    } },
+  },
+  required: ['items'],
+};
+
+const roadmapOutputSchema = z.object({
+  items: z.array(z.object({
+    id: z.string().min(1),
+    title: z.string().trim().min(1).max(160),
+    description: z.string().trim().min(1).max(300).optional(),
+  }).strict()).max(50),
+}).strict();
 
 const PROMPT_RULES = [
   'Use only the supplied deterministic facts.',
@@ -90,13 +112,27 @@ export class GeminiAiProvider implements AiProvider {
     return parsed.data;
   }
 
+  async rewriteRoadmap(items: RoadmapAiItem[]): Promise<RoadmapAiItem[]> {
+    const prompt = [
+      `Roadmap wording prompt version ${ROADMAP_PROMPT_VERSION}. ${PROMPT_RULES}`,
+      'Rewrite only titles and descriptions. Keep every ID and the item order. Do not add tasks or change factual details.',
+      JSON.stringify({ items }),
+    ].join('\n');
+    const output = await this.generate(prompt, roadmapJsonSchema);
+    const parsed = roadmapOutputSchema.safeParse(output);
+    if (!parsed.success) throw new AiProviderError('INVALID_RESPONSE');
+    return parsed.data.items.map((item) => ({
+      id: item.id, title: item.title, ...(item.description ? { description: item.description } : {}),
+    }));
+  }
+
   private async generate(prompt: string, outputSchema: object): Promise<unknown> {
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${this.model}:generateContent`;
     const body = JSON.stringify({
       contents: [{ role: 'user', parts: [{ text: prompt }] }],
       generationConfig: {
         responseMimeType: 'application/json', responseSchema: outputSchema,
-        temperature: 0.2, maxOutputTokens: 512,
+        temperature: 0.2, maxOutputTokens: 1024,
       },
     });
 

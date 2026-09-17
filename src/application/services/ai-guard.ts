@@ -11,3 +11,15 @@ export function isGroundedWording(output: string[], facts: string[]): boolean {
     return (sentence.match(numbers) ?? []).every((number) => knownNumbers.has(number));
   });
 }
+
+const roadmapRewriteWords = new Set([
+  'a', 'an', 'and', 'the', 'your', 'you', 'to', 'for', 'with', 'from', 'in', 'on', 'of',
+  'review', 'explore', 'check', 'confirm', 'prepare', 'gather', 'plan', 'record', 'choose', 'complete', 'compare',
+]);
+
+export function isGroundedRoadmapRewrite(output: string[], original: string[]): boolean {
+  if (!isGroundedWording(output, original)) return false;
+  const words = (value: string) => value.toLowerCase().match(/[a-z]+|\d[\d,.]*/g) ?? [];
+  const known = new Set(original.flatMap(words));
+  return output.every((sentence) => words(sentence).every((word) => known.has(word) || roadmapRewriteWords.has(word)));
+}
