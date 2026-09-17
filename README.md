@@ -17,6 +17,10 @@ universities. It copies known application dates with their source metadata,
 reports source coverage, and marks one available next action. An optional
 `enhanceWithAi: true` rewrites generic task wording; the task facts stay
 deterministic.
+`PUT /api/profile` saves a profile and its initial recommendation and roadmap
+snapshots in PostgreSQL. `GET /api/plan/:profileId` reads the current plan, and
+`PATCH /api/roadmaps/:roadmapId/items/:itemId` updates a task status and next
+action. These persistence routes require `DATABASE_URL`.
 
 ## Local run
 

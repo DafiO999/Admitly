@@ -58,6 +58,8 @@ model Profile {
   id                 String              @id @default(uuid()) @db.Uuid
   payload            Json
   profileHash        String
+  currentRoadmapId   String?             @db.Uuid
+  currentRoadmap     Roadmap?            @relation("CurrentRoadmap", fields: [currentRoadmapId], references: [id], onDelete: SetNull)
   targetField        StudyField
   targetIntakeYear   Int
   gpaValue           Float
@@ -70,6 +72,7 @@ model Profile {
   roadmaps           Roadmap[]
 
   @@index([profileHash])
+  @@index([currentRoadmapId])
   @@index([targetField, targetIntakeYear])
 }
 
@@ -138,10 +141,12 @@ model Roadmap {
   recommendationRun   RecommendationRun? @relation(fields: [recommendationRunId], references: [id], onDelete: SetNull)
   profileHash         String
   rulesVersion        String
+  selectedUniversityIds Json               @default("[]")
   sourceCoverage      Json?
   createdAt           DateTime           @default(now())
   updatedAt           DateTime           @updatedAt
   items               RoadmapItem[]
+  currentForProfiles  Profile[]          @relation("CurrentRoadmap")
 
   @@index([profileId, createdAt])
   @@index([recommendationRunId])
@@ -152,6 +157,7 @@ model RoadmapItem {
   roadmapId    String          @db.Uuid
   roadmap      Roadmap         @relation(fields: [roadmapId], references: [id], onDelete: Cascade)
   key          String
+  position     Int             @default(0)
   title        String
   description  String?
   category     RoadmapCategory
@@ -166,5 +172,6 @@ model RoadmapItem {
   updatedAt    DateTime        @updatedAt
 
   @@unique([roadmapId, key])
+  @@unique([roadmapId, position])
   @@index([roadmapId, status])
 }

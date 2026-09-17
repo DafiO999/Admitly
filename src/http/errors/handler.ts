@@ -1,11 +1,13 @@
 import type { FastifyInstance } from 'fastify';
 import { ZodError } from 'zod';
+import { DatabaseUnavailableError } from '../../application/ports/plan-repository.js';
+import { PersistedPlanNotFoundError } from '../../application/services/plan-persistence.js';
 import { UniversityProviderError } from '../../application/ports/university-provider.js';
 import { ComparisonUniversityNotFoundError } from '../../application/services/comparison.js';
 import { RecommendationNotFoundError } from '../../application/services/recommendation-explanation.js';
 import { RoadmapProgramMismatchError, RoadmapUniversityNotFoundError } from '../../application/services/roadmap.js';
 
-type ErrorCode = 'VALIDATION' | 'NOT_FOUND' | 'EXTERNAL_UNAVAILABLE' | 'INTERNAL';
+type ErrorCode = 'VALIDATION' | 'NOT_FOUND' | 'EXTERNAL_UNAVAILABLE' | 'DATABASE_UNAVAILABLE' | 'INTERNAL';
 
 function errorResponse(code: ErrorCode, message: string) {
   return { error: { code, message, details: [] } };
@@ -29,8 +31,12 @@ export function registerErrorHandlers(app: FastifyInstance): void {
         .send(errorResponse('EXTERNAL_UNAVAILABLE', 'University data unavailable'));
     }
 
+    if (error instanceof DatabaseUnavailableError) {
+      return reply.status(503).send(errorResponse('DATABASE_UNAVAILABLE', 'Database unavailable'));
+    }
+
     if (error instanceof ComparisonUniversityNotFoundError || error instanceof RecommendationNotFoundError
-      || error instanceof RoadmapUniversityNotFoundError) {
+      || error instanceof RoadmapUniversityNotFoundError || error instanceof PersistedPlanNotFoundError) {
       return reply.status(404).send(errorResponse('NOT_FOUND', 'Not found'));
     }
 
