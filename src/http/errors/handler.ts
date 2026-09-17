@@ -2,6 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { ZodError } from 'zod';
 import { UniversityProviderError } from '../../application/ports/university-provider.js';
 import { ComparisonUniversityNotFoundError } from '../../application/services/comparison.js';
+import { RecommendationNotFoundError } from '../../application/services/recommendation-explanation.js';
 
 type ErrorCode = 'VALIDATION' | 'NOT_FOUND' | 'EXTERNAL_UNAVAILABLE' | 'INTERNAL';
 
@@ -27,7 +28,7 @@ export function registerErrorHandlers(app: FastifyInstance): void {
         .send(errorResponse('EXTERNAL_UNAVAILABLE', 'University data unavailable'));
     }
 
-    if (error instanceof ComparisonUniversityNotFoundError) {
+    if (error instanceof ComparisonUniversityNotFoundError || error instanceof RecommendationNotFoundError) {
       return reply.status(404).send(errorResponse('NOT_FOUND', 'Not found'));
     }
 

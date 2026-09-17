@@ -7,6 +7,11 @@ development. `POST /api/diagnosis` returns a rules-based profile diagnosis.
 Its fit score describes profile match, not admission probability.
 `POST /api/comparison` compares two or three selected universities with the
 same fit scores and source-tagged requirements.
+Set `GEMINI_API_KEY` to enable optional Gemini wording. Pass
+`enhanceWithAi: true` to `POST /api/diagnosis`, or call
+`POST /api/recommendations/:universityId/explanation` with a profile. Both
+paths fall back to deterministic wording when Gemini is unavailable; ranking
+and fit scores remain rule-based.
 
 ## Local run
 

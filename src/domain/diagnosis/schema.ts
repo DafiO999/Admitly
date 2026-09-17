@@ -8,3 +8,10 @@ export const diagnosisSchema = z.object({
 }).strict();
 
 export type Diagnosis = z.infer<typeof diagnosisSchema>;
+
+export const aiDiagnosisOutputSchema = z.object({
+  goalSummary: z.string().trim().min(1).max(300),
+  strengths: z.array(z.string().trim().min(1).max(300)).max(8),
+  constraints: z.array(z.string().trim().min(1).max(300)).max(8),
+  focusNow: z.array(z.string().trim().min(1).max(300)).max(8),
+}).strict();
