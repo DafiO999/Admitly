@@ -51,6 +51,17 @@ The same package scripts work with npm (`npm run dev`, `npm run build`, etc.).
 Run `pnpm lint`, `pnpm typecheck`, `pnpm test`, and `pnpm build` for normal
 checks. `pnpm start` runs compiled JavaScript after a build.
 
+## Production image
+
+`docker build .` creates the Linux backend image with a Node 22 build stage,
+generated Prisma Client, and a non-root runtime containing production
+dependencies and compiled JavaScript. It starts `dist/server.js` on port 3001.
+Pass `DATABASE_URL` and other production settings at container runtime; local
+environment files are excluded from the build context. The image healthcheck
+uses `/api/health`, while `/api/ready` checks database availability. The
+runtime image includes the Prisma CLI and migrations for an explicit
+`npx --no-install prisma migrate deploy` deployment step.
+
 `TEST_DATABASE_URL` in `.env.example` uses the dedicated `admitly_test` schema.
 Apply migrations to that schema before `pnpm test:integration`, for example by
 temporarily setting `DATABASE_URL` to the `TEST_DATABASE_URL` value and running

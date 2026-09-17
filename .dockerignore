@@ -1,0 +1,14 @@
+.git
+.gitignore
+.env
+.env.*
+DOCS
+node_modules
+dist
+coverage
+tests
+deploy
+backups
+*.log
+.codex
+.openai

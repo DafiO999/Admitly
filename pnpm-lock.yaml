@@ -17,6 +17,9 @@ importers:
       fastify:
         specifier: ^5.12.4
         version: 5.12.4
+      prisma:
+        specifier: 6.19.3
+        version: 6.19.3(typescript@5.9.3)
       zod:
         specifier: ^4.6.5
         version: 4.6.5
@@ -30,9 +33,6 @@ importers:
       eslint:
         specifier: ^9.39.5
         version: 9.39.5(jiti@2.7.0)(supports-color@7.2.0)
-      prisma:
-        specifier: 6.19.3
-        version: 6.19.3(typescript@5.9.3)
       tsx:
         specifier: ^4.23.13
         version: 4.23.13
