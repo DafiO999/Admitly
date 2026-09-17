@@ -14,5 +14,3 @@ The same package scripts work with npm (`npm run dev`, `npm run build`, etc.).
 Run `pnpm lint`, `pnpm typecheck`, `pnpm test`, `pnpm build`, and
 `pnpm test:integration` to check the foundation. `pnpm start` runs compiled
 JavaScript after a build.
-
-The project specification and milestone roadmap are in `DOCS/docs/`.
