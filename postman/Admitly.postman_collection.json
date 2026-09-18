@@ -1,0 +1,333 @@
+{
+  "info": {
+    "_postman_id": "9a3b1bb0-36fb-4ed3-8fe8-27ea5b74109a",
+    "name": "Admitly Local Backend",
+    "description": "Run requests from top to bottom against the local backend. Edit the profileJson collection variable to change the applicant in all demo requests. Recommendations sets university IDs; Save profile sets profile and roadmap IDs. All data is fictional demo data.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "01 Health",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{baseUrl}}/api/health",
+        "description": "Liveness check. Expected response: {\"status\":\"ok\"}."
+      }
+    },
+    {
+      "name": "02 Ready",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{baseUrl}}/api/ready",
+        "description": "Database readiness check. Expected response: {\"status\":\"ready\"} after migrations."
+      }
+    },
+    {
+      "name": "03 Diagnosis",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/api/diagnosis",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"profile\": {{profileJson}},\n  \"enhanceWithAi\": false\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "description": "Edit collection variable profileJson to change the applicant. Rules mode works without Gemini."
+      }
+    },
+    {
+      "name": "04 Recommendations",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/api/recommendations",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"profile\": {{profileJson}}\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "description": "Returns ranked universities and automatically stores the first two IDs for later requests. A field with no matching demo program may return an empty list."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "if (pm.response.code === 200) {",
+              "  const recommendations = pm.response.json().recommendations || [];",
+              "  pm.collectionVariables.unset('universityId1');",
+              "  pm.collectionVariables.unset('universityId2');",
+              "  if (recommendations[0]) pm.collectionVariables.set('universityId1', recommendations[0].universityId);",
+              "  if (recommendations[1]) pm.collectionVariables.set('universityId2', recommendations[1].universityId);",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "05 Comparison",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/api/comparison",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"profile\": {{profileJson}},\n  \"universityIds\": [\"{{universityId1}}\", \"{{universityId2}}\"]\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "description": "Run Recommendations first. Compares the first two recommended universities in the requested order."
+      }
+    },
+    {
+      "name": "06 Roadmap",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/api/roadmap",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"profile\": {{profileJson}},\n  \"selectedUniversityIds\": [\"{{universityId1}}\", \"{{universityId2}}\"],\n  \"enhanceWithAi\": false\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "description": "Run Recommendations first. Builds a source-aware plan for the first two universities."
+      }
+    },
+    {
+      "name": "07 Recommendation explanation",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/api/recommendations/{{universityId1}}/explanation",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"profile\": {{profileJson}}\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "description": "Run Recommendations first. Returns deterministic wording when Gemini is not configured."
+      }
+    },
+    {
+      "name": "08 Save profile and plan",
+      "request": {
+        "method": "PUT",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/api/profile",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"profile\": {{profileJson}}\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "description": "Creates a saved plan. The response script stores profileId, roadmapId, and an actionable itemId for the following requests."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "if (pm.response.code === 200) {",
+              "  const plan = pm.response.json();",
+              "  pm.collectionVariables.set('profileId', plan.profile.id);",
+              "  pm.collectionVariables.set('roadmapId', plan.roadmap.id);",
+              "  if (plan.roadmap.nextActionId) pm.collectionVariables.set('itemId', plan.roadmap.nextActionId);",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "09 Get saved plan",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{baseUrl}}/api/plan/{{profileId}}",
+        "description": "Run Save profile first. Returns the current saved plan. Send it again after recalculation to see the update."
+      }
+    },
+    {
+      "name": "10 Update next action",
+      "request": {
+        "method": "PATCH",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/api/roadmaps/{{roadmapId}}/items/{{itemId}}",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"status\": \"done\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "description": "Run Save profile first. Change status to pending, in_progress, done, or blocked. The saved roadmap gets a new next action."
+      }
+    },
+    {
+      "name": "11 Recalculate plan",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/api/plan/recalculate",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"profile\": {{recalculatedProfileJson}}\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "description": "Run Save profile first. This request copies profileJson, adds the saved profileId, and replaces annualBudgetUsd with the recalculatedBudgetUsd collection variable. Edit that variable to try another budget."
+      },
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const profile = JSON.parse(pm.collectionVariables.get('profileJson'));",
+              "const profileId = pm.collectionVariables.get('profileId');",
+              "if (!profileId) throw new Error('Run 08 Save profile and plan first.');",
+              "profile.id = profileId;",
+              "profile.annualBudgetUsd = Number(pm.collectionVariables.get('recalculatedBudgetUsd'));",
+              "pm.variables.set('recalculatedProfileJson', JSON.stringify(profile));"
+            ]
+          }
+        },
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "if (pm.response.code === 200) {",
+              "  const plan = pm.response.json();",
+              "  pm.collectionVariables.set('roadmapId', plan.roadmap.id);",
+              "  if (plan.roadmap.nextActionId) pm.collectionVariables.set('itemId', plan.roadmap.nextActionId);",
+              "}"
+            ]
+          }
+        }
+      ]
+    }
+  ],
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://127.0.0.1:3001",
+      "type": "string",
+      "description": "Change if the backend PORT or HOST changes."
+    },
+    {
+      "key": "profileJson",
+      "value": "{\"targetCountry\":\"US\",\"targetDegree\":\"bachelor\",\"targetField\":\"computer_science\",\"targetIntakeYear\":2028,\"gpaValue\":3.6,\"gpaScale\":4,\"englishExam\":{\"type\":\"IELTS\",\"status\":\"taken\",\"score\":7},\"sat\":{\"status\":\"taken\",\"score\":1240},\"annualBudgetUsd\":26000,\"preferredStates\":[\"CA\",\"TX\"],\"campusSize\":\"any\"}",
+      "type": "string",
+      "description": "Edit this JSON object to change applicant input across diagnosis, recommendations, comparison, roadmap, and persistence."
+    },
+    {
+      "key": "recalculatedBudgetUsd",
+      "value": "60000",
+      "type": "string",
+      "description": "Budget used by the recalculation example."
+    },
+    {
+      "key": "universityId1",
+      "value": "",
+      "type": "string",
+      "description": "Filled by Recommendations."
+    },
+    {
+      "key": "universityId2",
+      "value": "",
+      "type": "string",
+      "description": "Filled by Recommendations."
+    },
+    {
+      "key": "profileId",
+      "value": "",
+      "type": "string",
+      "description": "Filled by Save profile and plan."
+    },
+    {
+      "key": "roadmapId",
+      "value": "",
+      "type": "string",
+      "description": "Filled by Save profile and plan or Recalculate plan."
+    },
+    {
+      "key": "itemId",
+      "value": "",
+      "type": "string",
+      "description": "Filled by Save profile and plan or Recalculate plan."
+    }
+  ]
+}
