@@ -76,6 +76,17 @@ Uploads are signature-checked, size-limited, and stored under randomized names
 in the private `.data/uploads` directory by default. The API never returns a
 storage path. Set `LETTER_UPLOAD_DIR`, `LETTER_ATTACHMENT_MAX_FILE_BYTES`, and
 `LETTER_ATTACHMENT_MAX_TOTAL_BYTES` to change storage and limits.
+`POST /api/letters/:letterId/prepare` checks the selected final content,
+verified admissions contact, sender, and attachments before marking a letter
+ready. Sending requires a separate `POST /api/letters/:letterId/send` request
+with an `Idempotency-Key` header. The backend resolves the recipient again,
+streams private attachments, and records the SMTP attempt and message ID.
+`GET /api/letters/:letterId` returns final content, attachment metadata, and
+delivery state. An accepted send means the SMTP provider accepted the message;
+it does not establish that the university read or accepted it. Configure
+`SMTP_HOST`, `SMTP_PORT`, `SMTP_SECURE`, `SMTP_USER`, `SMTP_PASSWORD`,
+`SMTP_FROM_EMAIL`, and `SMTP_FROM_NAME`. The fixed configured mailbox is the
+`From` address; the student's email is used as `Reply-To`.
 Set `GEMINI_API_KEY` to enable optional Gemini wording. Pass
 `enhanceWithAi: true` to `POST /api/diagnosis`, or call
 `POST /api/recommendations/:universityId/explanation` with a profile. Both

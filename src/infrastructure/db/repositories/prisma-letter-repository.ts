@@ -10,13 +10,14 @@ import { programSummarySchema } from '../../../domain/university/schema.js';
 
 const variantOrder = { concise: 0, balanced: 1, detailed: 2 } as const;
 
-function toRecord(row: AdmissionLetter): LetterRecord {
+export function toLetterRecord(row: AdmissionLetter): LetterRecord {
   return {
     id: row.id, profileId: row.profileId, universityId: row.universityId,
     universityContactId: row.universityContactId, purpose: row.purpose,
     status: row.status, senderName: row.senderName, replyToEmail: row.replyToEmail,
     subject: row.subject, body: row.body, selectedVariantId: row.selectedVariantId,
     createdAt: row.createdAt.toISOString(), updatedAt: row.updatedAt.toISOString(),
+    sentAt: row.sentAt?.toISOString() ?? null,
   };
 }
 
@@ -52,7 +53,7 @@ export class PrismaLetterRepository implements LetterRepository {
   async create(input: Parameters<LetterRepository['create']>[0]): Promise<LetterRecord> {
     try {
       const row = await this.client.admissionLetter.create({ data: input });
-      return toRecord(row);
+      return toLetterRecord(row);
     } catch {
       throw new DatabaseUnavailableError();
     }
@@ -61,7 +62,7 @@ export class PrismaLetterRepository implements LetterRepository {
   async findById(letterId: string): Promise<LetterRecord | null> {
     try {
       const row = await this.client.admissionLetter.findUnique({ where: { id: letterId } });
-      return row ? toRecord(row) : null;
+      return row ? toLetterRecord(row) : null;
     } catch {
       throw new DatabaseUnavailableError();
     }
@@ -123,7 +124,7 @@ export class PrismaLetterRepository implements LetterRepository {
             subject: input.subject, body: input.body,
           },
         });
-        return toRecord(updated);
+        return toLetterRecord(updated);
       }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
     } catch (error) {
       if (error instanceof LetterNotFoundError || error instanceof LetterNotEditableError

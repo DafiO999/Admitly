@@ -7,15 +7,15 @@ import { LetterNotEditableError, LetterNotFoundError } from '../../../applicatio
 import { DatabaseUnavailableError } from '../../../application/ports/plan-repository.js';
 import { attachmentMetadataSchema, type AttachmentMetadata } from '../../../domain/letter/attachment.js';
 
-function toMetadata(row: LetterAttachment): AttachmentMetadata {
+export function toAttachmentMetadata(row: LetterAttachment): AttachmentMetadata {
   return attachmentMetadataSchema.parse({
     id: row.id, originalName: row.originalName, mimeType: row.mimeType,
     sizeBytes: row.sizeBytes, sha256: row.sha256, createdAt: row.createdAt.toISOString(),
   });
 }
 
-function toStored(row: LetterAttachment): StoredAttachment {
-  return { ...toMetadata(row), letterId: row.letterId, storageKey: row.storageKey };
+export function toStoredAttachment(row: LetterAttachment): StoredAttachment {
+  return { ...toAttachmentMetadata(row), letterId: row.letterId, storageKey: row.storageKey };
 }
 
 function assertEditable(status: string): void {
@@ -30,7 +30,7 @@ export class PrismaLetterAttachmentRepository implements LetterAttachmentReposit
       const rows = await this.client.letterAttachment.findMany({
         where: { letterId }, orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
       });
-      return rows.map(toMetadata);
+      return rows.map(toAttachmentMetadata);
     } catch {
       throw new DatabaseUnavailableError();
     }
@@ -39,7 +39,7 @@ export class PrismaLetterAttachmentRepository implements LetterAttachmentReposit
   async find(letterId: string, attachmentId: string): Promise<StoredAttachment | null> {
     try {
       const row = await this.client.letterAttachment.findFirst({ where: { id: attachmentId, letterId } });
-      return row ? toStored(row) : null;
+      return row ? toStoredAttachment(row) : null;
     } catch {
       throw new DatabaseUnavailableError();
     }
@@ -63,7 +63,7 @@ export class PrismaLetterAttachmentRepository implements LetterAttachmentReposit
           letterId: input.letterId, originalName: input.originalName, storageKey: input.storageKey,
           mimeType: input.mimeType, sizeBytes: input.sizeBytes, sha256: input.sha256,
         } });
-        return toMetadata(row);
+        return toAttachmentMetadata(row);
       }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
     } catch (error) {
       if (error instanceof LetterNotFoundError || error instanceof LetterNotEditableError

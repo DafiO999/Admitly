@@ -12,6 +12,15 @@ const optionalDatabaseUrl = z.preprocess(
   }).optional(),
 );
 
+const optionalSmtpText = z.preprocess(
+  (value) => value === '' ? undefined : value,
+  z.string().trim().min(1).optional(),
+);
+const optionalSmtpEmail = z.preprocess(
+  (value) => value === '' ? undefined : value,
+  z.email().max(254).optional(),
+);
+
 const environmentSchema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
   HOST: z.string().trim().min(1).default('127.0.0.1'),
@@ -22,10 +31,26 @@ const environmentSchema = z.object({
   GEMINI_API_KEY: optionalString,
   GEMINI_MODEL: optionalString,
   COLLEGE_SCORECARD_API_KEY: optionalString,
+  SMTP_HOST: optionalSmtpText,
+  SMTP_PORT: z.coerce.number().int().min(1).max(65535).default(587),
+  SMTP_SECURE: z.enum(['true', 'false']).default('false').transform((value) => value === 'true'),
+  SMTP_USER: optionalSmtpText,
+  SMTP_PASSWORD: optionalSmtpText,
+  SMTP_FROM_EMAIL: optionalSmtpEmail,
+  SMTP_FROM_NAME: z.string().trim().min(1).max(120).default('Admitly'),
   LETTER_UPLOAD_DIR: optionalString,
   LETTER_ATTACHMENT_MAX_FILE_BYTES: z.coerce.number().int().min(1).max(100 * 1024 * 1024).default(10 * 1024 * 1024),
   LETTER_ATTACHMENT_MAX_TOTAL_BYTES: z.coerce.number().int().min(1).max(500 * 1024 * 1024).default(20 * 1024 * 1024),
 }).superRefine((value, context) => {
+  const smtpFields = ['SMTP_HOST', 'SMTP_USER', 'SMTP_PASSWORD', 'SMTP_FROM_EMAIL'] as const;
+  if (value.NODE_ENV === 'production' || smtpFields.some((field) => Boolean(value[field]))) {
+    for (const field of smtpFields) {
+      if (!value[field]) context.addIssue({ code: 'custom', path: [field], message: 'SMTP setting is required' });
+    }
+  }
+  if (value.SMTP_PORT === 465 && !value.SMTP_SECURE) {
+    context.addIssue({ code: 'custom', path: ['SMTP_SECURE'], message: 'Port 465 requires TLS' });
+  }
   if (value.LETTER_ATTACHMENT_MAX_TOTAL_BYTES < value.LETTER_ATTACHMENT_MAX_FILE_BYTES) {
     context.addIssue({ code: 'custom', path: ['LETTER_ATTACHMENT_MAX_TOTAL_BYTES'],
       message: 'Total attachment limit must be at least the per-file limit' });

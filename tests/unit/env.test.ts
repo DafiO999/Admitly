@@ -10,6 +10,9 @@ describe('environment configuration', () => {
       DEMO_DATA_MODE: true,
       LETTER_ATTACHMENT_MAX_FILE_BYTES: 10485760,
       LETTER_ATTACHMENT_MAX_TOTAL_BYTES: 20971520,
+      SMTP_PORT: 587,
+      SMTP_SECURE: false,
+      SMTP_FROM_NAME: 'Admitly',
     });
   });
 
@@ -24,6 +27,11 @@ describe('environment configuration', () => {
     expect(() => loadEnvironment({ LETTER_ATTACHMENT_MAX_FILE_BYTES: '0' })).toThrow('LETTER_ATTACHMENT_MAX_FILE_BYTES');
     expect(() => loadEnvironment({ LETTER_ATTACHMENT_MAX_FILE_BYTES: '30', LETTER_ATTACHMENT_MAX_TOTAL_BYTES: '20' }))
       .toThrow('LETTER_ATTACHMENT_MAX_TOTAL_BYTES');
+    expect(() => loadEnvironment({ SMTP_HOST: 'smtp.example.test' })).toThrow('SMTP_USER');
+    expect(() => loadEnvironment({ SMTP_PORT: '465' })).toThrow('SMTP_SECURE');
+    expect(() => loadEnvironment({ SMTP_FROM_EMAIL: 'bad-address' })).toThrow('SMTP_FROM_EMAIL');
+    expect(loadEnvironment({ SMTP_HOST: 'smtp.example.test', SMTP_USER: 'user', SMTP_PASSWORD: 'secret',
+      SMTP_FROM_EMAIL: 'letters@example.test' })).toMatchObject({ SMTP_HOST: 'smtp.example.test' });
   });
 
   it('requires a PostgreSQL URL in production without exposing its value', () => {
@@ -32,5 +40,7 @@ describe('environment configuration', () => {
       .toThrow('DATABASE_URL');
     expect(() => loadEnvironment({ NODE_ENV: 'production', DATABASE_URL: 'postgresql://localhost/admitly',
       LETTER_UPLOAD_DIR: 'relative/uploads' })).toThrow('LETTER_UPLOAD_DIR');
+    expect(() => loadEnvironment({ NODE_ENV: 'production', DATABASE_URL: 'postgresql://localhost/admitly' }))
+      .toThrow('SMTP_HOST');
   });
 });

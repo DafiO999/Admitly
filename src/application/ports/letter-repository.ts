@@ -17,6 +17,7 @@ export interface LetterRecord {
   selectedVariantId: string | null;
   createdAt: string;
   updatedAt: string;
+  sentAt?: string | null;
 }
 
 export interface LetterGenerationRecord {

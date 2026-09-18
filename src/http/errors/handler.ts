@@ -13,11 +13,17 @@ import {
   AttachmentNotFoundError, AttachmentTooLargeError, InvalidFileError,
   LetterAttachmentTotalLimitError, UnsupportedAttachmentTypeError,
 } from '../../application/ports/letter-attachment-repository.js';
+import {
+  LetterAlreadySentError, LetterNotReadyError, LetterSendInProgressError,
+} from '../../application/ports/letter-delivery-repository.js';
+import { MailDeliveryError, MailProviderUnavailableError } from '../../application/ports/mail-provider.js';
 
 type ErrorCode = 'VALIDATION' | 'REQUEST_TOO_LARGE' | 'NOT_FOUND' | 'CONFLICT'
   | 'EXTERNAL_UNAVAILABLE' | 'DATABASE_UNAVAILABLE' | 'INTERNAL' | 'UNIVERSITY_EMAIL_UNAVAILABLE'
   | 'LETTER_NOT_FOUND' | 'LETTER_NOT_EDITABLE' | 'INVALID_REPLY_TO' | 'AI_DRAFT_GENERATION_FAILED'
-  | 'UNSUPPORTED_ATTACHMENT_TYPE' | 'ATTACHMENT_TOO_LARGE' | 'LETTER_ATTACHMENT_TOTAL_LIMIT' | 'INVALID_FILE';
+  | 'UNSUPPORTED_ATTACHMENT_TYPE' | 'ATTACHMENT_TOO_LARGE' | 'LETTER_ATTACHMENT_TOTAL_LIMIT' | 'INVALID_FILE'
+  | 'LETTER_NOT_READY' | 'LETTER_ALREADY_SENT' | 'LETTER_SEND_IN_PROGRESS'
+  | 'MAIL_PROVIDER_UNAVAILABLE' | 'MAIL_SEND_FAILED';
 
 function errorResponse(code: ErrorCode, message: string) {
   return { error: { code, message, details: [] } };
@@ -82,6 +88,27 @@ export function registerErrorHandlers(app: FastifyInstance): void {
 
     if (error instanceof LetterNotEditableError) {
       return send(409, 'LETTER_NOT_EDITABLE', 'Letter is not editable');
+    }
+
+    if (error instanceof LetterNotReadyError) {
+      return send(409, 'LETTER_NOT_READY', 'Letter is not ready to send');
+    }
+
+    if (error instanceof LetterAlreadySentError) {
+      return send(409, 'LETTER_ALREADY_SENT', 'Letter already sent');
+    }
+
+    if (error instanceof LetterSendInProgressError) {
+      return send(409, 'LETTER_SEND_IN_PROGRESS', 'Letter send in progress or outcome unknown');
+    }
+
+    if (error instanceof MailProviderUnavailableError) {
+      return send(503, 'MAIL_PROVIDER_UNAVAILABLE', 'Mail provider unavailable');
+    }
+
+    if (error instanceof MailDeliveryError) {
+      return send(502, 'MAIL_SEND_FAILED', error.state === 'ambiguous'
+        ? 'Mail delivery outcome unknown; do not retry automatically' : 'Mail delivery failed');
     }
 
     if (error instanceof InvalidReplyToError) {

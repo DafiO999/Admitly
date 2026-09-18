@@ -5,12 +5,14 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { buildApp } from '../../src/app.js';
 import type { LetterDraftProvider } from '../../src/application/ports/letter-draft-provider.js';
+import type { MailProvider } from '../../src/application/ports/mail-provider.js';
 import { letterDraftSentenceBank } from '../../src/domain/letter/draft-guard.js';
 import { generatedLetterDraftsSchema, type GenerateLetterDraftsInput } from '../../src/domain/letter/schema.js';
 import { normalizeGpa } from '../../src/domain/profile/normalize.js';
 import { createPrismaClient } from '../../src/infrastructure/db/prisma/client.js';
 import { PrismaLetterRepository } from '../../src/infrastructure/db/repositories/prisma-letter-repository.js';
 import { PrismaLetterAttachmentRepository } from '../../src/infrastructure/db/repositories/prisma-letter-attachment-repository.js';
+import { PrismaLetterDeliveryRepository } from '../../src/infrastructure/db/repositories/prisma-letter-delivery-repository.js';
 import { PrismaUniversityContactRepository } from '../../src/infrastructure/db/repositories/prisma-university-contact-repository.js';
 import { canonicalDemoProfile, demoUniversities } from '../../src/infrastructure/demo/fixtures.js';
 import { LocalFileStorage } from '../../src/infrastructure/storage/local-file-storage.js';
@@ -60,6 +62,7 @@ describe('admission letter persistence and routes', () => {
     const contacts = new PrismaUniversityContactRepository(client);
     const letters = new PrismaLetterRepository(client);
     const attachments = new PrismaLetterAttachmentRepository(client);
+    const delivery = new PrismaLetterDeliveryRepository(client);
     const uploadDir = await mkdtemp(join(tmpdir(), 'admitly-integration-files-'));
     const storage = new LocalFileStorage(uploadDir);
     const profileId = randomUUID();
@@ -74,9 +77,31 @@ describe('admission letter persistence and routes', () => {
         return result;
       },
     };
+    const sentMessages: { to: string; replyTo: string; subject: string; body: string;
+      attachments: { filename: string; bytes: Buffer }[] }[] = [];
+    let sendCount = 0;
+    let sendGate: Promise<void> | null = null;
+    let onSendStarted: (() => void) | null = null;
+    let sendFailure: Error | null = null;
+    const mailProvider: MailProvider = { send: async (input) => {
+      sendCount += 1;
+      const files = [];
+      for (const attachment of input.attachments) {
+        const chunks: Buffer[] = [];
+        for await (const chunk of attachment.content) chunks.push(Buffer.from(chunk));
+        files.push({ filename: attachment.filename, bytes: Buffer.concat(chunks) });
+      }
+      sentMessages.push({ to: input.to, replyTo: input.replyTo.email,
+        subject: input.subject, body: input.body, attachments: files });
+      if (sendFailure) throw sendFailure;
+      onSendStarted?.();
+      if (sendGate) await sendGate;
+      return { providerMessageId: `<smtp-${sendCount}@example.test>` };
+    } };
     const app = buildApp({}, {
       contactRepository: contacts, letterRepository: letters, letterDraftProvider: provider,
-      attachmentRepository: attachments, fileStorage: storage,
+      attachmentRepository: attachments, deliveryRepository: delivery, fileStorage: storage,
+      mailProvider,
       attachmentLimits: { maxFileBytes: 50, maxTotalBytes: 40 },
     });
     try {
@@ -218,6 +243,124 @@ describe('admission letter persistence and routes', () => {
       expect((await letters.findById(letterId))?.body).toBe('My edited final text');
       expect((await client.letterGeneration.findUniqueOrThrow({ where: { id: firstGenerationId } })))
         .toEqual(snapshot);
+
+      const beforePrepare = await app.inject({ method: 'GET', url: `/api/letters/${letterId}` });
+      expect(beforePrepare.statusCode).toBe(200);
+      expect(beforePrepare.json().delivery).toEqual({ state: 'not_sent' });
+      const notReady = await app.inject({ method: 'POST', url: `/api/letters/${letterId}/send`,
+        headers: { 'idempotency-key': 'first-send' } });
+      expect(notReady.json().error.code).toBe('LETTER_NOT_READY');
+      expect(sendCount).toBe(0);
+      const finalAttachment = await app.inject({ method: 'POST', url: attachmentsUrl,
+        ...multipartFile('award.pdf', 'application/pdf', pdf) });
+      expect(finalAttachment.statusCode).toBe(200);
+      await contacts.upsert({
+        id: contactId, universityId, kind: 'international_admissions',
+        email: 'admissions@example.edu', sourceUrl: 'https://example.edu/admissions',
+        sourceStatus: 'official', verifiedAt: '2026-09-18T00:00:00.000Z', active: false,
+      });
+      const unverifiedPrepare = await app.inject({ method: 'POST', url: `/api/letters/${letterId}/prepare` });
+      expect(unverifiedPrepare.json().error.code).toBe('UNIVERSITY_EMAIL_UNAVAILABLE');
+      await contacts.upsert({
+        id: contactId, universityId, kind: 'international_admissions',
+        email: 'admissions@example.edu', sourceUrl: 'https://example.edu/admissions',
+        sourceStatus: 'official', verifiedAt: '2026-09-18T00:00:00.000Z', active: true,
+      });
+      const prepared = await app.inject({ method: 'POST', url: `/api/letters/${letterId}/prepare` });
+      expect(prepared.statusCode, prepared.body).toBe(200);
+      expect(prepared.json().letter.status).toBe('ready_to_send');
+      expect((await app.inject({ method: 'POST', url: attachmentsUrl,
+        ...multipartFile('late.pdf', 'application/pdf', pdf) })).json().error.code).toBe('LETTER_NOT_EDITABLE');
+      const missingKey = await app.inject({ method: 'POST', url: `/api/letters/${letterId}/send` });
+      expect(missingKey.statusCode).toBe(400);
+      const overrideRecipient = await app.inject({ method: 'POST', url: `/api/letters/${letterId}/send`,
+        headers: { 'idempotency-key': 'first-send' }, payload: { recipientEmail: 'attacker@example.com' } });
+      expect(overrideRecipient.statusCode).toBe(400);
+      await contacts.upsert({
+        id: contactId, universityId, kind: 'international_admissions',
+        email: 'admissions@example.edu', sourceUrl: 'https://example.edu/admissions',
+        sourceStatus: 'official', verifiedAt: '2026-09-18T00:00:00.000Z', active: false,
+      });
+      const unverifiedSend = await app.inject({ method: 'POST', url: `/api/letters/${letterId}/send`,
+        headers: { 'idempotency-key': 'first-send' } });
+      expect(unverifiedSend.json().error.code).toBe('UNIVERSITY_EMAIL_UNAVAILABLE');
+      expect(sendCount).toBe(0);
+      await contacts.upsert({
+        id: contactId, universityId, kind: 'international_admissions',
+        email: 'admissions@example.edu', sourceUrl: 'https://example.edu/admissions',
+        sourceStatus: 'official', verifiedAt: '2026-09-18T00:00:00.000Z', active: true,
+      });
+      const sent = await app.inject({ method: 'POST', url: `/api/letters/${letterId}/send`,
+        headers: { 'idempotency-key': 'first-send' } });
+      expect(sent.statusCode, sent.body).toBe(200);
+      expect(sent.json()).toMatchObject({ letter: { status: 'sent', recipientEmail: 'admissions@example.edu' },
+        delivery: { state: 'accepted', providerMessageId: '<smtp-1@example.test>' } });
+      expect(sentMessages[0]).toEqual({ to: 'admissions@example.edu', replyTo: 'alex@example.com',
+        subject: 'My edited subject', body: 'My edited final text',
+        attachments: [{ filename: 'award.pdf', bytes: pdf }] });
+      const replay = await app.inject({ method: 'POST', url: `/api/letters/${letterId}/send`,
+        headers: { 'idempotency-key': 'first-send' } });
+      expect(replay.statusCode).toBe(200);
+      expect(replay.json()).toEqual(sent.json());
+      expect(sendCount).toBe(1);
+      const anotherKey = await app.inject({ method: 'POST', url: `/api/letters/${letterId}/send`,
+        headers: { 'idempotency-key': 'different-key' } });
+      expect(anotherKey.json().error.code).toBe('LETTER_ALREADY_SENT');
+      const sentDetail = await app.inject({ method: 'GET', url: `/api/letters/${letterId}` });
+      expect(sentDetail.json()).toMatchObject({
+        letter: { status: 'sent', subject: 'My edited subject', body: 'My edited final text' },
+        delivery: { state: 'accepted', providerMessageId: '<smtp-1@example.test>' },
+      });
+      expect(sentDetail.json().attachments).toEqual([finalAttachment.json().attachment]);
+      expect(sentDetail.body).not.toContain('storageKey');
+
+      const secondId = secondLetter.json().letter.id as string;
+      const secondContent = await app.inject({ method: 'PUT', url: `/api/letters/${secondId}/content`,
+        payload: { sourceVariantId: secondDrafts.json().variants[1].id,
+          subject: 'Second final subject', body: 'Second final body' } });
+      expect(secondContent.statusCode).toBe(200);
+      expect((await app.inject({ method: 'POST', url: `/api/letters/${secondId}/prepare` })).statusCode).toBe(200);
+      let releaseSend!: () => void;
+      let markStarted!: () => void;
+      sendGate = new Promise<void>((resolve) => { releaseSend = resolve; });
+      const startedSend = new Promise<void>((resolve) => { markStarted = resolve; });
+      onSendStarted = markStarted;
+      const pendingSend = app.inject({ method: 'POST', url: `/api/letters/${secondId}/send`,
+        headers: { 'idempotency-key': 'parallel-key' } });
+      await startedSend;
+      const sameWhileSending = await app.inject({ method: 'POST', url: `/api/letters/${secondId}/send`,
+        headers: { 'idempotency-key': 'parallel-key' } });
+      expect(sameWhileSending.json().error.code).toBe('LETTER_SEND_IN_PROGRESS');
+      const differentWhileSending = await app.inject({ method: 'POST', url: `/api/letters/${secondId}/send`,
+        headers: { 'idempotency-key': 'another-parallel-key' } });
+      expect(differentWhileSending.json().error.code).toBe('LETTER_SEND_IN_PROGRESS');
+      releaseSend();
+      expect((await pendingSend).statusCode).toBe(200);
+      sendGate = null;
+      onSendStarted = null;
+      expect(sendCount).toBe(2);
+
+      const failedLetter = await app.inject({ method: 'POST', url: createUrl, payload: createBody });
+      const failedId = failedLetter.json().letter.id as string;
+      const failedDrafts = await app.inject({ method: 'POST', url: `/api/letters/${failedId}/drafts`, payload: {} });
+      expect(failedDrafts.statusCode).toBe(200);
+      expect((await app.inject({ method: 'PUT', url: `/api/letters/${failedId}/content`, payload: {
+        sourceVariantId: failedDrafts.json().variants[0].id, subject: 'Failure test', body: 'Failure test body',
+      } })).statusCode).toBe(200);
+      expect((await app.inject({ method: 'POST', url: `/api/letters/${failedId}/prepare` })).statusCode).toBe(200);
+      sendFailure = new Error('private SMTP diagnostic');
+      const failedSend = await app.inject({ method: 'POST', url: `/api/letters/${failedId}/send`,
+        headers: { 'idempotency-key': 'ambiguous-key' } });
+      expect(failedSend.statusCode).toBe(502);
+      expect(failedSend.json().error.code).toBe('MAIL_SEND_FAILED');
+      expect(failedSend.body).not.toContain('private SMTP diagnostic');
+      expect((await app.inject({ method: 'GET', url: `/api/letters/${failedId}` })).json()).toMatchObject({
+        letter: { status: 'failed' }, delivery: { state: 'ambiguous', errorCode: 'MAIL_SEND_FAILED' },
+      });
+      const failedReplay = await app.inject({ method: 'POST', url: `/api/letters/${failedId}/send`,
+        headers: { 'idempotency-key': 'ambiguous-key' } });
+      expect(failedReplay.statusCode).toBe(502);
+      expect(sendCount).toBe(3);
     } finally {
       await app.close();
       await client.profile.deleteMany({ where: { id: profileId } });
@@ -226,5 +369,5 @@ describe('admission letter persistence and routes', () => {
       await client.$disconnect();
       await rm(uploadDir, { recursive: true, force: true });
     }
-  }, 15_000);
+  }, 25_000);
 });

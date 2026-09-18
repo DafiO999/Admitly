@@ -19,7 +19,7 @@ validate_configuration() {
   docker compose version >/dev/null 2>&1 || die 'Docker Compose is required'
   [[ -f $ENV_FILE && -r $ENV_FILE ]] || die 'Production environment file is missing or unreadable'
   [[ ${ENV_FILE##*/} != env.production.example ]] || die 'Use an untracked production environment file'
-  if grep -Eq '^SITE_DOMAIN=.*\.invalid([[:space:]]*)$|^(POSTGRES_PASSWORD|DATABASE_URL)=.*replace-with-' "$ENV_FILE"; then
+  if grep -Eq '^SITE_DOMAIN=.*\.invalid([[:space:]]*)$|^(POSTGRES_PASSWORD|DATABASE_URL|SMTP_HOST|SMTP_USER|SMTP_PASSWORD)=.*replace-with-|^SMTP_FROM_EMAIL=.*\.invalid([[:space:]]*)$' "$ENV_FILE"; then
     die 'Replace the example environment placeholders before running this script'
   fi
   "${COMPOSE[@]}" config --quiet || die 'Production Compose configuration is invalid'

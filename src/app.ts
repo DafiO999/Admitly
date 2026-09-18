@@ -7,6 +7,9 @@ import type { LetterRepository } from './application/ports/letter-repository.js'
 import type { LetterDraftProvider } from './application/ports/letter-draft-provider.js';
 import type { LetterAttachmentRepository } from './application/ports/letter-attachment-repository.js';
 import type { FileStorage } from './application/ports/file-storage.js';
+import type { LetterDeliveryRepository } from './application/ports/letter-delivery-repository.js';
+import type { MailProvider } from './application/ports/mail-provider.js';
+import { MailProviderUnavailableError } from './application/ports/mail-provider.js';
 import type { AdmissionRequirementProvider } from './application/ports/admission-requirement-provider.js';
 import type { AiProvider } from './application/ports/ai-provider.js';
 import { DatabaseUnavailableError, type PlanRepository } from './application/ports/plan-repository.js';
@@ -16,6 +19,7 @@ import { comparisonRoutes } from './http/routes/comparison.js';
 import { admissionsContactRoutes } from './http/routes/admissions-contact.js';
 import { letterRoutes } from './http/routes/letters.js';
 import { letterAttachmentRoutes } from './http/routes/letter-attachments.js';
+import { letterDeliveryRoutes } from './http/routes/letter-delivery.js';
 import { diagnosisRoutes } from './http/routes/diagnosis.js';
 import { healthRoutes } from './http/routes/health.js';
 import { planPersistenceRoutes } from './http/routes/plan-persistence.js';
@@ -29,8 +33,10 @@ import { PrismaPlanRepository } from './infrastructure/db/repositories/prisma-pl
 import { PrismaUniversityContactRepository } from './infrastructure/db/repositories/prisma-university-contact-repository.js';
 import { PrismaLetterRepository } from './infrastructure/db/repositories/prisma-letter-repository.js';
 import { PrismaLetterAttachmentRepository } from './infrastructure/db/repositories/prisma-letter-attachment-repository.js';
+import { PrismaLetterDeliveryRepository } from './infrastructure/db/repositories/prisma-letter-delivery-repository.js';
 import { createLetterDraftProvider } from './infrastructure/letter-draft-provider.js';
 import { LocalFileStorage } from './infrastructure/storage/local-file-storage.js';
+import { SMTPMailProvider } from './infrastructure/mail/smtp-mail-provider.js';
 
 export function buildApp(
   options: FastifyServerOptions = {},
@@ -43,6 +49,8 @@ export function buildApp(
     letterRepository?: LetterRepository;
     letterDraftProvider?: LetterDraftProvider | null;
     attachmentRepository?: LetterAttachmentRepository;
+    deliveryRepository?: LetterDeliveryRepository;
+    mailProvider?: MailProvider;
     fileStorage?: FileStorage;
     attachmentLimits?: { maxFileBytes: number; maxTotalBytes: number };
     readinessCheck?: () => Promise<void>;
@@ -56,6 +64,8 @@ export function buildApp(
   let contactRepository: UniversityContactRepository | undefined;
   let letterRepository: LetterRepository | undefined;
   let attachmentRepository: LetterAttachmentRepository | undefined;
+  let deliveryRepository: LetterDeliveryRepository | undefined;
+  let mailProvider: MailProvider | undefined;
   let fileStorage: FileStorage | undefined;
   const databaseClientFactory = () => {
     if (databaseClient) return databaseClient;
@@ -90,6 +100,23 @@ export function buildApp(
     attachmentRepository = new PrismaLetterAttachmentRepository(databaseClientFactory());
     return attachmentRepository;
   };
+  const deliveryRepositoryFactory = () => {
+    if (dependencies.deliveryRepository) return dependencies.deliveryRepository;
+    if (deliveryRepository) return deliveryRepository;
+    deliveryRepository = new PrismaLetterDeliveryRepository(databaseClientFactory());
+    return deliveryRepository;
+  };
+  const mailProviderFactory = () => {
+    if (dependencies.mailProvider) return dependencies.mailProvider;
+    if (mailProvider) return mailProvider;
+    const environment = loadEnvironment(process.env);
+    if (!environment.SMTP_HOST || !environment.SMTP_USER || !environment.SMTP_PASSWORD
+      || !environment.SMTP_FROM_EMAIL) throw new MailProviderUnavailableError();
+    mailProvider = new SMTPMailProvider({ host: environment.SMTP_HOST, port: environment.SMTP_PORT,
+      secure: environment.SMTP_SECURE, user: environment.SMTP_USER, password: environment.SMTP_PASSWORD,
+      fromEmail: environment.SMTP_FROM_EMAIL, fromName: environment.SMTP_FROM_NAME });
+    return mailProvider;
+  };
   const fileStorageFactory = () => {
     if (dependencies.fileStorage) return dependencies.fileStorage;
     if (fileStorage) return fileStorage;
@@ -122,6 +149,8 @@ export function buildApp(
   app.register(letterRoutes(contactRepositoryFactory, letterRepositoryFactory, letterDraftProviderFactory));
   app.register(letterAttachmentRoutes(letterRepositoryFactory, attachmentRepositoryFactory,
     fileStorageFactory, attachmentLimitsFactory));
+  app.register(letterDeliveryRoutes(contactRepositoryFactory, deliveryRepositoryFactory,
+    fileStorageFactory, mailProviderFactory, attachmentLimitsFactory));
   app.register(diagnosisRoutes(aiProviderFactory));
   app.register(recommendationRoutes(
     () => dependencies.universityProvider ?? createUniversityProvider(loadEnvironment(process.env)),

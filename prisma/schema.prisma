@@ -69,6 +69,13 @@ enum LetterVariantKind {
   detailed
 }
 
+enum LetterSendAttemptStatus {
+  started
+  accepted
+  failed
+  ambiguous
+}
+
 enum RoadmapCategory {
   exam
   document
@@ -172,6 +179,7 @@ model AdmissionLetter {
   sentAt               DateTime?
   generations          LetterGeneration[]
   attachments          LetterAttachment[]
+  sendAttempts         LetterSendAttempt[]
 
   @@index([profileId, createdAt])
   @@index([universityId, status])
@@ -214,6 +222,23 @@ model LetterAttachment {
   sha256       String
   createdAt    DateTime        @default(now())
 
+  @@index([letterId, createdAt])
+}
+
+model LetterSendAttempt {
+  id                String                  @id @default(uuid()) @db.Uuid
+  letterId          String                  @db.Uuid
+  letter            AdmissionLetter         @relation(fields: [letterId], references: [id], onDelete: Cascade)
+  idempotencyKey    String
+  status            LetterSendAttemptStatus @default(started)
+  provider          String                  @default("smtp")
+  recipientEmail    String
+  providerMessageId String?
+  errorCode         String?
+  createdAt         DateTime                @default(now())
+  completedAt       DateTime?
+
+  @@unique([letterId, idempotencyKey])
   @@index([letterId, createdAt])
 }
 

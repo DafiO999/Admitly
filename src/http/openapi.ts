@@ -30,7 +30,9 @@ const errorSchema = z.object({
     code: z.enum(['VALIDATION', 'REQUEST_TOO_LARGE', 'NOT_FOUND', 'CONFLICT',
       'EXTERNAL_UNAVAILABLE', 'DATABASE_UNAVAILABLE', 'INTERNAL', 'UNIVERSITY_EMAIL_UNAVAILABLE',
       'LETTER_NOT_FOUND', 'LETTER_NOT_EDITABLE', 'INVALID_REPLY_TO', 'AI_DRAFT_GENERATION_FAILED',
-      'UNSUPPORTED_ATTACHMENT_TYPE', 'ATTACHMENT_TOO_LARGE', 'LETTER_ATTACHMENT_TOTAL_LIMIT', 'INVALID_FILE']),
+      'UNSUPPORTED_ATTACHMENT_TYPE', 'ATTACHMENT_TOO_LARGE', 'LETTER_ATTACHMENT_TOTAL_LIMIT', 'INVALID_FILE',
+      'LETTER_NOT_READY', 'LETTER_ALREADY_SENT', 'LETTER_SEND_IN_PROGRESS',
+      'MAIL_PROVIDER_UNAVAILABLE', 'MAIL_SEND_FAILED']),
     message: z.string(),
     details: z.array(z.unknown()),
   }).strict(),
@@ -64,12 +66,24 @@ const letterRecordSchema = z.object({
   senderName: z.string(), replyToEmail: z.email(),
   subject: z.string().nullable(), body: z.string().nullable(), selectedVariantId: z.uuid().nullable(),
   createdAt: z.iso.datetime(), updatedAt: z.iso.datetime(),
+  sentAt: z.iso.datetime().nullable(),
 }).strict();
 const letterGenerationResponseSchema = z.object({
   generationId: z.uuid(), promptVersion: z.string(),
   variants: z.array(z.object({
     id: z.uuid(), variant: letterVariantTypeSchema, subject: z.string(), body: z.string(),
   }).strict()).length(3),
+}).strict();
+const letterGenerationMetadataSchema = z.object({
+  id: z.uuid(), promptVersion: z.string(), createdAt: z.iso.datetime(),
+  variants: z.array(z.object({ id: z.uuid(), variant: letterVariantTypeSchema,
+    createdAt: z.iso.datetime() }).strict()),
+}).strict();
+const letterDeliveryStateSchema = z.object({
+  state: z.enum(['not_sent', 'started', 'accepted', 'failed', 'ambiguous']),
+  recipientEmail: z.email().optional(), providerMessageId: z.string().nullable().optional(),
+  errorCode: z.string().nullable().optional(), createdAt: z.iso.datetime().optional(),
+  completedAt: z.iso.datetime().nullable().optional(),
 }).strict();
 const roadmapResponseSchema = z.object({
   roadmap: roadmapSchema, sourceCoverage: sourceCoverageSchema,
@@ -113,6 +127,16 @@ const schemas = {
   AttachmentUploadResponse: z.object({ attachment: attachmentMetadataSchema }).strict(),
   AttachmentListResponse: z.object({ attachments: z.array(attachmentMetadataSchema) }).strict(),
   AttachmentDeleteResponse: z.object({ deleted: z.literal(true) }).strict(),
+  LetterPrepareResponse: z.object({ letter: letterRecordSchema, recipientEmail: z.email() }).strict(),
+  LetterSendResponse: z.object({
+    letter: z.object({ id: z.uuid(), status: z.literal('sent'), recipientEmail: z.email(),
+      sentAt: z.iso.datetime() }).strict(),
+    delivery: z.object({ state: z.literal('accepted'), providerMessageId: z.string().nullable() }).strict(),
+  }).strict(),
+  LetterDetailResponse: z.object({
+    letter: letterRecordSchema, generations: z.array(letterGenerationMetadataSchema),
+    attachments: z.array(attachmentMetadataSchema), delivery: letterDeliveryStateSchema,
+  }).strict(),
   RoadmapRequest: roadmapRequestSchema,
   RoadmapResponse: roadmapResponseSchema,
   SaveProfileRequest: saveProfileRequestSchema,
@@ -196,6 +220,21 @@ export function generateOpenApiDocument() {
       [path(apiPaths.letterAttachment)]: { delete: operation('deleteLetterAttachment',
         'Delete one private letter attachment', 'AttachmentDeleteResponse', undefined,
         ['letterId', 'attachmentId'], [400, 404, 409, 503]) },
+      [path(apiPaths.letterPrepare)]: { post: operation('prepareAdmissionLetter',
+        'Validate and prepare an admission letter for sending', 'LetterPrepareResponse', undefined,
+        ['letterId'], [400, 404, 409, 503]) },
+      [path(apiPaths.letterSend)]: { post: {
+        ...operation('sendAdmissionLetter', 'Send a prepared admission letter',
+          'LetterSendResponse', undefined, ['letterId'], [400, 404, 409, 502, 503]),
+        parameters: [
+          { name: 'letterId', in: 'path', required: true, schema: json(z.uuid()) },
+          { name: 'Idempotency-Key', in: 'header', required: true,
+            schema: { type: 'string', minLength: 1, maxLength: 128 } },
+        ],
+      } },
+      [path(apiPaths.letter)]: { get: operation('getAdmissionLetter',
+        'Get letter content, attachment metadata and delivery state', 'LetterDetailResponse', undefined,
+        ['letterId'], [400, 404, 503]) },
       [path(apiPaths.roadmap)]: { post: operation('createRoadmap', 'Build a roadmap',
         'RoadmapResponse', 'RoadmapRequest', [], [400, 404, 413, 422, 502, 503]) },
       [path(apiPaths.profile)]: { put: operation('saveProfile', 'Save a profile and plan',
