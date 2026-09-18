@@ -10,6 +10,9 @@ import {
   requirementNames, roadmapTitle, scoreSummary, stateNames, statuses, visibleProgramFields,
 } from "@/lib/russian";
 import { universityImage } from "@/lib/images";
+import { CinematicHero } from "@/components/hero/cinematic-hero";
+import { Onboarding } from "@/components/onboarding";
+import { LetterComposer } from "@/components/letter-composer";
 
 const PROFILE_KEY = "admitly.profileId";
 const THEME_KEY = "admitly.theme";
@@ -131,24 +134,29 @@ export function ProductApp() {
 
   const detailId = path.startsWith("/universities/") ? decodeURIComponent(path.slice("/universities/".length)) : null;
   const detail = detailId ? byId.get(detailId) : null;
+  const letterUniversityId = path.startsWith("/letters/") ? decodeURIComponent(path.slice("/letters/".length)) : null;
+  const letterUniversity = letterUniversityId ? byId.get(letterUniversityId) : null;
   const nav = [
     ["/discover", "Университеты"], ["/compare", `Сравнение${compareIds.length ? ` (${compareIds.length})` : ""}`],
     ["/plan", "План"], ["/profile", "Профиль"],
   ];
+  if (path === "/") return <CinematicHero onEnterProduct={() => go(plan ? "/home" : "/onboarding")} />;
   return <>
     <header className="top">
-      <button className="brand" onClick={() => go("/")} aria-label="Admitly — главная"><i />Admitly</button>
+      <button className="brand" onClick={() => go("/home")} aria-label="Admitly — главная"><i />Admitly</button>
       <nav>{nav.map(([url, label]) => <button key={url} onClick={() => go(url)} className={path === url ? "active" : ""}>{label}{path === url && <span className="navActive" />}</button>)}</nav>
       <div className="topRight"><button className="themeButton" onClick={() => { const next = theme === "dark" ? "light" : "dark"; setTheme(next); document.documentElement.dataset.theme = next; localStorage.setItem(THEME_KEY, next); }} aria-label="Сменить тему">{theme === "dark" ? "☀" : "☾"}</button></div>
     </header>
     <main className="shell">
       {error && <div className="alert" role="alert">{error}<button onClick={() => setError("")} aria-label="Закрыть">×</button></div>}
       {loading ? <Empty title="Загружаем план" text="Подождите немного." />
-        : path === "/" ? <Home plan={plan} go={go} />
-        : path === "/profile" || path === "/onboarding" ? <ProfileForm key={plan?.profile.id ?? "new"} initial={profile} save={saveProfile} busy={busy} diagnosis={diagnosis} plan={plan} />
+        : path === "/home" ? <Home plan={plan} go={go} />
+        : path === "/onboarding" ? <Onboarding key={plan?.profile.id ?? "new"} initial={profile} save={saveProfile} busy={busy} />
+        : path === "/profile" ? <ProfileForm key={plan?.profile.id ?? "new"} initial={profile} save={saveProfile} busy={busy} diagnosis={diagnosis} plan={plan} />
         : path === "/discover" ? <Discover rows={recommendations} hasProfile={Boolean(plan)} go={go} selected={compareIds} toggle={toggleCompare} refresh={refreshRecommendations} busy={busy} />
         : path === "/compare" ? <Compare rows={selected} comparisons={comparison} go={go} toggle={toggleCompare} load={loadComparison} busy={busy} />
         : path === "/plan" ? <PlanPage plan={plan} setTask={setTask} busy={busy} go={go} />
+        : letterUniversity && plan ? <LetterComposer key={letterUniversity.universityId} universityId={letterUniversity.universityId} universityName={letterUniversity.university.name} profileId={plan.profile.id} go={go} />
         : detail ? <UniversityPage row={detail} profile={plan!.profile} go={go} selected={compareIds.includes(detail.universityId)} toggle={toggleCompare} />
         : <Empty title="Страница не найдена" text="Вернитесь к подбору университетов." action="К подбору" onClick={() => go("/discover")} />}
     </main>
@@ -294,6 +302,7 @@ function UniversityPage({ row, profile, go, selected, toggle }: { row: Recommend
         <p>{programName(profile.targetField)}</p>
         <div className="actions">
           <Action onClick={() => toggle(u.id)}>{selected ? "Убрать из сравнения" : "Добавить к сравнению"}</Action>
+          <button className="ghost" onClick={() => go(`/letters/${encodeURIComponent(u.id)}`)}>Написать в приёмную</button>
           {u.websiteUrl && <a className="ghost linkButton" href={u.websiteUrl} target="_blank" rel="noreferrer">Сайт университета ↗</a>}
         </div>
       </div>

@@ -37,9 +37,12 @@ npm run dev
 
 Open `http://localhost:3000`. Next.js forwards `/api/*` to the API at
 `http://127.0.0.1:3001`; set `API_ORIGIN` for another backend address. Profile
-and task progress live in PostgreSQL. Browser storage keeps only the profile
-ID and theme. University photos reuse Atlas's decorative images; live facts and
-public source links come from College Scorecard.
+and task progress live in PostgreSQL. Browser storage keeps the profile ID,
+theme, and identifiers needed to resume a letter or retry a send safely; the
+letter and its attachments live on the backend. The frontend uses Atlas's
+current landing visuals and layout with onboarding fields supported by the API.
+University photos are decorative; live facts and public source links come from
+College Scorecard.
 The backend filters Scorecard by matching bachelor programs before ranking up to
 30 universities. Preferred states add another candidate pool. Recommendations
 are saved with the plan; the frontend refreshes older snapshots after an engine
@@ -78,16 +81,32 @@ storage path. Set `LETTER_UPLOAD_DIR`, `LETTER_ATTACHMENT_MAX_FILE_BYTES`, and
 `LETTER_ATTACHMENT_MAX_TOTAL_BYTES` to change storage and limits.
 `POST /api/letters/:letterId/prepare` checks the selected final content,
 verified admissions contact, sender, and attachments before marking a letter
-ready. Sending requires a separate `POST /api/letters/:letterId/send` request
-with an `Idempotency-Key` header. The backend resolves the recipient again,
-streams private attachments, and records the SMTP attempt and message ID.
+ready. Real sending requires `MAIL_DELIVERY_MODE=smtp` and a separate
+`POST /api/letters/:letterId/send` request with an `Idempotency-Key` header.
+The backend resolves the recipient again, streams private attachments, and
+records the SMTP attempt and message ID.
 `GET /api/letters/:letterId` returns final content, attachment metadata, and
 delivery state. An accepted send means the SMTP provider accepted the message;
-it does not establish that the university read or accepted it. Configure
+it does not establish that the university read or accepted it. For SMTP mode, configure
 `SMTP_HOST`, `SMTP_PORT`, `SMTP_SECURE`, `SMTP_USER`, `SMTP_PASSWORD`,
 `SMTP_FROM_EMAIL`, and `SMTP_FROM_NAME`. The fixed configured mailbox is the
-`From` address; the student's email is used as `Reply-To`.
-Set `GEMINI_API_KEY` to enable optional Gemini wording. Pass
+`From` address; the student's email is used as `Reply-To`. The frontend opens
+this flow from a recommended university. It requires a saved profile, a verified
+admissions contact, and `GEMINI_API_KEY` for draft generation. A university
+without a verified contact shows an unavailable state.
+
+`MAIL_DELIVERY_MODE=mock` is the default, including in production. In this mode,
+the frontend's letter button opens the letter composer. `POST /api/letters/mock-send`
+validates the saved profile and university and returns a simulation ID; it does
+not contact an admissions office, invoke SMTP or Gemini, store the text, or mark
+a roadmap task complete. `GET /api/letter-delivery-mode` tells the frontend
+which composer to show. The real send endpoint is disabled in mock mode.
+`POST /api/letters/mock-drafts` uses Gemini to return three grounded variants
+from the saved profile and selected recommendation without persisting them.
+Letter generation defaults to `gemini-3.5-flash-lite` for low latency and can
+be changed with `GEMINI_LETTER_MODEL` independently of `GEMINI_MODEL`.
+Set `MAIL_DELIVERY_MODE=smtp` with the SMTP settings above to enable real
+delivery. Set `GEMINI_API_KEY` to enable optional Gemini wording. Pass
 `enhanceWithAi: true` to `POST /api/diagnosis`, or call
 `POST /api/recommendations/:universityId/explanation` with a profile. Both
 paths fall back to deterministic wording when Gemini is unavailable; ranking

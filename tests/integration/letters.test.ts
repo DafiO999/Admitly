@@ -50,11 +50,13 @@ function multipartTwoFiles(content: Buffer) {
 }
 
 function safeDrafts(input: GenerateLetterDraftsInput) {
-  const bank = letterDraftSentenceBank(input);
+  const contextSentence = input.additionalContext;
+  const bank = letterDraftSentenceBank(input, contextSentence);
   const question = bank.lines.find((line) => line.startsWith('Could '))!;
-  return generatedLetterDraftsSchema.parse({ variants: [
-    { variant: 'concise', subject: bank.subjects[0], body: [bank.lines[0], bank.lines[1], question, 'Sincerely,', input.sender.fullName].join('\n') },
-    { variant: 'balanced', subject: bank.subjects[1], body: [bank.lines[0], bank.lines[1], bank.lines[2], question, 'Sincerely,', input.sender.fullName].join('\n') },
+  const context = contextSentence ? [contextSentence] : [];
+  return generatedLetterDraftsSchema.parse({ ...(contextSentence ? { contextSentence } : {}), variants: [
+    { variant: 'concise', subject: bank.subjects[0], body: [bank.lines[0], bank.lines[1], ...context, question, 'Sincerely,', input.sender.fullName].join('\n') },
+    { variant: 'balanced', subject: bank.subjects[1], body: [bank.lines[0], bank.lines[1], bank.lines[2], ...context, question, 'Thank you for your time and guidance.', 'Sincerely,', input.sender.fullName].join('\n') },
     { variant: 'detailed', subject: bank.subjects[2], body: bank.lines.join('\n') },
   ] });
 }
@@ -114,6 +116,7 @@ describe('admission letter persistence and routes', () => {
       planRepository: plans,
       attachmentRepository: attachments, deliveryRepository: delivery, fileStorage: storage,
       mailProvider,
+      mailDeliveryMode: 'smtp',
       attachmentLimits: { maxFileBytes: 50, maxTotalBytes: 40 },
     });
     try {

@@ -27,6 +27,8 @@ describe('generated API contract', () => {
       ['POST', apiPaths.recommendations], ['POST', apiPaths.recommendationExplanation],
       ['POST', apiPaths.comparison], ['POST', apiPaths.roadmap], ['PUT', apiPaths.profile],
       ['GET', apiPaths.admissionsContact],
+      ['GET', apiPaths.letterDeliveryMode], ['POST', apiPaths.mockLetterSend],
+      ['POST', apiPaths.mockLetterDrafts],
       ['POST', apiPaths.createLetter], ['POST', apiPaths.letterDrafts], ['PUT', apiPaths.letterContent],
       ['POST', apiPaths.letterAttachments], ['GET', apiPaths.letterAttachments], ['DELETE', apiPaths.letterAttachment],
       ['POST', apiPaths.letterPrepare], ['POST', apiPaths.letterSend], ['GET', apiPaths.letter],

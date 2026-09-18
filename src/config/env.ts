@@ -30,7 +30,9 @@ const environmentSchema = z.object({
   TEST_DATABASE_URL: optionalDatabaseUrl,
   GEMINI_API_KEY: optionalString,
   GEMINI_MODEL: optionalString,
+  GEMINI_LETTER_MODEL: optionalString,
   COLLEGE_SCORECARD_API_KEY: optionalString,
+  MAIL_DELIVERY_MODE: z.enum(['mock', 'smtp']).default('mock'),
   SMTP_HOST: optionalSmtpText,
   SMTP_PORT: z.coerce.number().int().min(1).max(65535).default(587),
   SMTP_SECURE: z.enum(['true', 'false']).default('false').transform((value) => value === 'true'),
@@ -43,7 +45,7 @@ const environmentSchema = z.object({
   LETTER_ATTACHMENT_MAX_TOTAL_BYTES: z.coerce.number().int().min(1).max(500 * 1024 * 1024).default(20 * 1024 * 1024),
 }).superRefine((value, context) => {
   const smtpFields = ['SMTP_HOST', 'SMTP_USER', 'SMTP_PASSWORD', 'SMTP_FROM_EMAIL'] as const;
-  if (value.NODE_ENV === 'production' || smtpFields.some((field) => Boolean(value[field]))) {
+  if (value.MAIL_DELIVERY_MODE === 'smtp') {
     for (const field of smtpFields) {
       if (!value[field]) context.addIssue({ code: 'custom', path: [field], message: 'SMTP setting is required' });
     }

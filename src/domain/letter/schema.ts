@@ -42,6 +42,7 @@ const generatedVariantFields = {
   body: z.string().trim().min(1).max(5000),
 };
 export const generatedLetterDraftsSchema = z.object({
+  contextSentence: z.string().trim().min(1).max(500).regex(/^[^\r\n]+$/).optional(),
   variants: z.tuple([
     z.object({ variant: z.literal('concise'), ...generatedVariantFields }).strict(),
     z.object({ variant: z.literal('balanced'), ...generatedVariantFields }).strict(),

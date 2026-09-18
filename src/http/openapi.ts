@@ -1,5 +1,8 @@
 import { z } from 'zod';
 import { comparisonRequestSchema } from '../application/services/comparison.js';
+import {
+  mockLetterDraftsRequestSchema, mockLetterSendRequestSchema,
+} from '../application/services/mock-letter-send.js';
 import { diagnosisRequestSchema } from '../application/services/diagnosis.js';
 import {
   recalculateRequestSchema, saveProfileRequestSchema, statusRequestSchema,
@@ -118,6 +121,18 @@ const schemas = {
   ComparisonRequest: comparisonRequestSchema,
   ComparisonResponse: comparisonResponseSchema,
   AdmissionsContactResponse: admissionsContactResponseSchema,
+  LetterDeliveryModeResponse: z.object({ mode: z.enum(['mock', 'smtp']) }).strict(),
+  MockLetterDraftsRequest: mockLetterDraftsRequestSchema,
+  MockLetterDraftsResponse: z.object({
+    variants: z.array(z.object({
+      id: z.uuid(), variant: letterVariantTypeSchema, subject: z.string(), body: z.string(),
+    }).strict()).length(3),
+  }).strict(),
+  MockLetterSendRequest: mockLetterSendRequestSchema,
+  MockLetterSendResponse: z.object({
+    status: z.literal('simulated'), simulationId: z.uuid(), universityId: z.string(),
+    universityName: z.string(), subject: z.string(),
+  }).strict(),
   CreateLetterRequest: createLetterRequestSchema,
   CreateLetterResponse: z.object({ letter: letterRecordSchema, recipientEmail: z.email() }).strict(),
   LetterDraftsRequest: generateLetterDraftsRequestSchema,
@@ -197,6 +212,14 @@ export function generateOpenApiDocument() {
       [path(apiPaths.admissionsContact)]: { get: operation('getAdmissionsContact',
         'Get an active verified admissions contact', 'AdmissionsContactResponse',
         undefined, ['universityId'], [400, 404, 503]) },
+      [path(apiPaths.letterDeliveryMode)]: { get: operation('getLetterDeliveryMode',
+        'Get the configured letter delivery mode', 'LetterDeliveryModeResponse') },
+      [path(apiPaths.mockLetterDrafts)]: { post: operation('prepareMockLetterDrafts',
+        'Generate three grounded Gemini letter variants without persisting a message',
+        'MockLetterDraftsResponse', 'MockLetterDraftsRequest', [], [400, 404, 413, 422, 502, 503]) },
+      [path(apiPaths.mockLetterSend)]: { post: operation('simulateLetterSend',
+        'Simulate a letter send without delivering or persisting a message',
+        'MockLetterSendResponse', 'MockLetterSendRequest', [], [400, 404, 413, 503]) },
       [path(apiPaths.createLetter)]: { post: operation('createAdmissionLetter',
         'Create an admission letter', 'CreateLetterResponse', 'CreateLetterRequest',
         ['universityId'], [400, 404, 413, 503]) },

@@ -20,6 +20,7 @@ import { admissionsContactRoutes } from './http/routes/admissions-contact.js';
 import { letterRoutes } from './http/routes/letters.js';
 import { letterAttachmentRoutes } from './http/routes/letter-attachments.js';
 import { letterDeliveryRoutes } from './http/routes/letter-delivery.js';
+import { mockLetterSendRoutes } from './http/routes/mock-letter-send.js';
 import { diagnosisRoutes } from './http/routes/diagnosis.js';
 import { healthRoutes } from './http/routes/health.js';
 import { planPersistenceRoutes } from './http/routes/plan-persistence.js';
@@ -51,6 +52,7 @@ export function buildApp(
     attachmentRepository?: LetterAttachmentRepository;
     deliveryRepository?: LetterDeliveryRepository;
     mailProvider?: MailProvider;
+    mailDeliveryMode?: 'mock' | 'smtp';
     fileStorage?: FileStorage;
     attachmentLimits?: { maxFileBytes: number; maxTotalBytes: number };
     readinessCheck?: () => Promise<void>;
@@ -116,6 +118,7 @@ export function buildApp(
     if (dependencies.mailProvider) return dependencies.mailProvider;
     if (mailProvider) return mailProvider;
     const environment = loadEnvironment(process.env);
+    if (environment.MAIL_DELIVERY_MODE !== 'smtp') throw new MailProviderUnavailableError();
     if (!environment.SMTP_HOST || !environment.SMTP_USER || !environment.SMTP_PASSWORD
       || !environment.SMTP_FROM_EMAIL) throw new MailProviderUnavailableError();
     mailProvider = new SMTPMailProvider({ host: environment.SMTP_HOST, port: environment.SMTP_PORT,
@@ -123,6 +126,8 @@ export function buildApp(
       fromEmail: environment.SMTP_FROM_EMAIL, fromName: environment.SMTP_FROM_NAME });
     return mailProvider;
   };
+  const mailDeliveryModeFactory = () =>
+    dependencies.mailDeliveryMode ?? loadEnvironment(process.env).MAIL_DELIVERY_MODE;
   const fileStorageFactory = () => {
     if (dependencies.fileStorage) return dependencies.fileStorage;
     if (fileStorage) return fileStorage;
@@ -156,7 +161,10 @@ export function buildApp(
   app.register(letterAttachmentRoutes(letterRepositoryFactory, attachmentRepositoryFactory,
     fileStorageFactory, attachmentLimitsFactory));
   app.register(letterDeliveryRoutes(contactRepositoryFactory, deliveryRepositoryFactory,
-    fileStorageFactory, mailProviderFactory, attachmentLimitsFactory));
+    fileStorageFactory, mailProviderFactory, attachmentLimitsFactory, mailDeliveryModeFactory));
+  app.register(mockLetterSendRoutes(
+    planRepositoryFactory, mailDeliveryModeFactory, letterDraftProviderFactory,
+  ));
   app.register(diagnosisRoutes(aiProviderFactory));
   app.register(recommendationRoutes(
     () => dependencies.universityProvider ?? createUniversityProvider(loadEnvironment(process.env)),

@@ -14,7 +14,7 @@ const questions: Record<GenerateLetterDraftsInput['purpose'], string> = {
   general: 'Could you direct me to the appropriate admissions information?',
 };
 
-export function letterDraftSentenceBank(input: GenerateLetterDraftsInput): {
+export function letterDraftSentenceBank(input: GenerateLetterDraftsInput, contextSentence?: string): {
   subjects: string[]; lines: string[];
 } {
   const school = input.university.name;
@@ -23,17 +23,17 @@ export function letterDraftSentenceBank(input: GenerateLetterDraftsInput): {
     'Dear Admissions Team,',
     `My name is ${input.sender.fullName}, and I am interested in undergraduate study at ${school}.`,
     `I am interested in ${field} for the ${input.profile.targetIntakeYear} intake.`,
+    `I am currently preparing for undergraduate applications for the ${input.profile.targetIntakeYear} intake.`,
   ];
+  if (contextSentence) lines.push(contextSentence);
   if (input.profile.englishExam?.status === 'taken' && input.profile.englishExam.score !== undefined) {
     lines.push(`My ${input.profile.englishExam.type} score is ${input.profile.englishExam.score}.`);
   }
   if (input.profile.sat?.status === 'taken' && input.profile.sat.score !== undefined) {
     lines.push(`My SAT score is ${input.profile.sat.score}.`);
   }
-  if (input.additionalContext) {
-    lines.push(`Additional information I would like to share: ${input.additionalContext.replace(/\s+/g, ' ').trim()}`);
-  }
-  lines.push(questions[input.purpose], 'Thank you for your time and guidance.', 'Sincerely,', input.sender.fullName);
+  lines.push(questions[input.purpose], 'I would appreciate any guidance you can provide.',
+    'Thank you for your time and guidance.', 'Sincerely,', input.sender.fullName);
   return {
     subjects: [
       `Undergraduate admissions inquiry for ${school}`,
@@ -47,7 +47,11 @@ export function letterDraftSentenceBank(input: GenerateLetterDraftsInput): {
 export function parseGroundedLetterDrafts(output: unknown, input: GenerateLetterDraftsInput): GeneratedLetterDrafts | null {
   const parsed = generatedLetterDraftsSchema.safeParse(output);
   if (!parsed.success) return null;
-  const bank = letterDraftSentenceBank(input);
+  const contextSentence = parsed.data.contextSentence;
+  if (Boolean(input.additionalContext) !== Boolean(contextSentence)) return null;
+  if (contextSentence && (/\p{Script=Cyrillic}/u.test(contextSentence)
+    || !/[A-Za-z]/.test(contextSentence) || !/[.!?]$/.test(contextSentence))) return null;
+  const bank = letterDraftSentenceBank(input, contextSentence);
   const subjects = new Set(bank.subjects);
   const lines = new Set(bank.lines);
   const bodies = new Set<string>();
@@ -63,6 +67,8 @@ export function parseGroundedLetterDrafts(output: unknown, input: GenerateLetter
       || !bodyLines.includes(bank.lines[1]!)
       || !bodyLines.includes(questions[input.purpose])
       || bodyLines.length <= previousLength) return null;
+    if (contextSentence && !bodyLines.includes(contextSentence)) return null;
+    if (draft.variant === 'detailed' && bodyLines.length !== bank.lines.length) return null;
     previousLength = bodyLines.length;
     if (bodies.has(draft.body)) return null;
     bodies.add(draft.body);

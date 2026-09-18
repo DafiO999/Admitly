@@ -60,25 +60,48 @@ const errorMessages: Record<string, string> = {
   NOT_FOUND: "Данные не найдены. Обновите страницу.", CONFLICT: "План изменился. Обновите страницу и повторите действие.",
   EXTERNAL_UNAVAILABLE: "Данные университетов сейчас недоступны.",
   DATABASE_UNAVAILABLE: "База данных сейчас недоступна.", INTERNAL: "Ошибка сервера. Попробуйте позже.",
+  UNIVERSITY_EMAIL_UNAVAILABLE: "У университета пока нет проверенного адреса приёмной комиссии.",
+  LETTER_NOT_FOUND: "Письмо не найдено. Создайте новое письмо.",
+  LETTER_NOT_EDITABLE: "Письмо больше нельзя изменить. Обновите страницу.",
+  LETTER_NOT_READY: "Сначала выберите и сохраните текст письма.",
+  LETTER_ALREADY_SENT: "Письмо уже отправлено.",
+  LETTER_SEND_IN_PROGRESS: "Статус отправки пока неизвестен. Проверьте письмо перед повторной попыткой.",
+  INVALID_REPLY_TO: "Укажите действительный адрес для ответа.",
+  AI_DRAFT_GENERATION_FAILED: "Не удалось создать черновики. Проверьте настройку Gemini и попробуйте позже.",
+  UNSUPPORTED_ATTACHMENT_TYPE: "Можно прикрепить PDF, JPEG или PNG.",
+  ATTACHMENT_TOO_LARGE: "Файл превышает допустимый размер.",
+  LETTER_ATTACHMENT_TOTAL_LIMIT: "Превышен общий размер вложений.",
+  INVALID_FILE: "Не удалось загрузить файл. Проверьте его формат.",
+  MAIL_PROVIDER_UNAVAILABLE: "Отправка почты сейчас недоступна.",
+  MAIL_SEND_FAILED: "Не удалось подтвердить отправку. Проверьте статус письма перед повторной попыткой.",
 };
 
-export async function api<T>(path: string, method: "GET" | "POST" | "PUT" | "PATCH" = "GET", body?: unknown): Promise<T> {
+export class ApiError extends Error {
+  constructor(message: string, public readonly code: string, public readonly status: number) { super(message); }
+}
+
+export async function apiRequest<T>(path: string, method: "GET" | "POST" | "PUT" | "PATCH" | "DELETE" = "GET", body?: unknown, headers?: Record<string, string>): Promise<T> {
   let response: Response;
   try {
     response = await fetch(`/api${path}`, {
       method,
-      headers: { "Content-Type": "application/json", "Accept-Language": "ru" },
-      ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+      headers: { ...(!(body instanceof FormData) && body !== undefined ? { "Content-Type": "application/json" } : {}), "Accept-Language": "ru", ...headers },
+      ...(body === undefined ? {} : { body: body instanceof FormData ? body : JSON.stringify(body) }),
       cache: "no-store",
     });
   } catch {
-    throw new Error("Нет соединения с сервером. Проверьте, что API запущен.");
+    throw new ApiError("Нет соединения с сервером. Проверьте, что API запущен.", "NETWORK", 0);
   }
   if (!response.ok) {
     const data = await response.json().catch(() => null) as { error?: { code?: string } } | null;
-    throw new Error(errorMessages[data?.error?.code ?? ""] ?? `Ошибка сервера (${response.status}).`);
+    const code = data?.error?.code ?? "UNKNOWN";
+    throw new ApiError(errorMessages[code] ?? `Ошибка сервера (${response.status}).`, code, response.status);
   }
   return response.json() as Promise<T>;
+}
+
+export async function api<T>(path: string, method: "GET" | "POST" | "PUT" | "PATCH" = "GET", body?: unknown): Promise<T> {
+  return apiRequest<T>(path, method, body);
 }
 
 export const defaultProfile: StudentProfile = {

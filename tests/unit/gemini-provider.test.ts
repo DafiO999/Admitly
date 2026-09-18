@@ -32,6 +32,7 @@ describe('Gemini AI provider', () => {
     expect(options?.headers).toMatchObject({ 'x-goog-api-key': 'private-key' });
     const body = JSON.parse(String(options?.body));
     expect(body.generationConfig.responseMimeType).toBe('application/json');
+    expect(body.generationConfig.thinkingConfig).toEqual({ thinkingLevel: 'low' });
     expect(body.generationConfig.responseSchema.required).toEqual(['summary', 'reasons', 'concerns']);
     expect(body.contents[0].parts[0].text).toContain('prompt version 1.0.0');
     expect(body.contents[0].parts[0].text).toContain('Do not add deadlines');
@@ -59,6 +60,7 @@ describe('Gemini AI provider', () => {
     const provider = new GeminiAiProvider({ apiKey: 'private-key', model: 'gemini-3.8-flash', fetcher });
     expect(await provider.explainRecommendation(input)).toEqual(explanation);
     expect(fetcher).toHaveBeenCalledTimes(2);
+    expect(String(fetcher.mock.calls[1]![0])).toContain('/models/gemini-3.5-flash-lite:generateContent');
   });
 
   it('stops after two timed-out attempts', async () => {
