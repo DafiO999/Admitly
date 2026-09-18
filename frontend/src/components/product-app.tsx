@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
 import {
-  api, defaultProfile, type Comparison, type Diagnosis, type Plan, type Recommendation,
+  api, defaultProfile, RECOMMENDATION_ENGINE_VERSION, type Comparison, type Diagnosis, type Plan, type Recommendation,
   type RoadmapStatus, type StudentProfile, type StudyField,
 } from "@/lib/api";
 import {
@@ -45,6 +45,7 @@ export function ProductApp() {
     catch { setDiagnosis(null); }
   }, []);
   useEffect(() => {
+    let cancelled = false;
     setPath(readPath());
     const savedTheme = localStorage.getItem(THEME_KEY) === "dark" ? "dark" : "light";
     setTheme(savedTheme);
@@ -53,12 +54,25 @@ export function ProductApp() {
     window.addEventListener("popstate", onPop);
     const id = localStorage.getItem(PROFILE_KEY);
     if (id) {
-      api<Plan>(`/plan/${encodeURIComponent(id)}`)
-        .then((value) => { setPlan(value); setProfile(value.profile); void loadDiagnosis(value.profile); })
-        .catch((reason: Error) => setError(reason.message))
-        .finally(() => setLoading(false));
+      const savedId = id;
+      async function loadPlan() {
+        try {
+          let value = await api<Plan>(`/plan/${encodeURIComponent(savedId)}`);
+          if (cancelled) return;
+          if (value.recommendationRun.engineVersion !== RECOMMENDATION_ENGINE_VERSION) {
+            try {
+              value = await api<Plan>("/plan/recalculate", "POST", { profile: value.profile });
+            } catch (reason) {
+              if (!cancelled) setError(`Не удалось обновить сохранённый подбор: ${(reason as Error).message}`);
+            }
+          }
+          if (!cancelled) { setPlan(value); setProfile(value.profile); void loadDiagnosis(value.profile); }
+        } catch (reason) { if (!cancelled) setError((reason as Error).message); }
+        finally { if (!cancelled) setLoading(false); }
+      }
+      void loadPlan();
     } else setLoading(false);
-    return () => window.removeEventListener("popstate", onPop);
+    return () => { cancelled = true; window.removeEventListener("popstate", onPop); };
   }, [loadDiagnosis]);
 
   const go = (next: string) => { history.pushState({}, "", next); setPath(next); setError(""); window.scrollTo(0, 0); };
@@ -78,6 +92,16 @@ export function ProductApp() {
       setPlan(saved); setProfile(saved.profile); setCompareIds([]); setComparison(null);
       void loadDiagnosis(saved.profile);
       go("/discover");
+    } catch (reason) { setError((reason as Error).message); }
+    finally { setBusy(false); }
+  }
+  async function refreshRecommendations() {
+    if (!plan) return;
+    setBusy(true); setError("");
+    try {
+      const updated = await api<Plan>("/plan/recalculate", "POST", { profile: plan.profile });
+      setPlan(updated); setProfile(updated.profile); setCompareIds([]); setComparison(null);
+      void loadDiagnosis(updated.profile);
     } catch (reason) { setError((reason as Error).message); }
     finally { setBusy(false); }
   }
@@ -122,7 +146,7 @@ export function ProductApp() {
       {loading ? <Empty title="Загружаем план" text="Подождите немного." />
         : path === "/" ? <Home plan={plan} go={go} />
         : path === "/profile" || path === "/onboarding" ? <ProfileForm key={plan?.profile.id ?? "new"} initial={profile} save={saveProfile} busy={busy} diagnosis={diagnosis} plan={plan} />
-        : path === "/discover" ? <Discover rows={recommendations} hasProfile={Boolean(plan)} go={go} selected={compareIds} toggle={toggleCompare} />
+        : path === "/discover" ? <Discover rows={recommendations} hasProfile={Boolean(plan)} go={go} selected={compareIds} toggle={toggleCompare} refresh={refreshRecommendations} busy={busy} />
         : path === "/compare" ? <Compare rows={selected} comparisons={comparison} go={go} toggle={toggleCompare} load={loadComparison} busy={busy} />
         : path === "/plan" ? <PlanPage plan={plan} setTask={setTask} busy={busy} go={go} />
         : detail ? <UniversityPage row={detail} profile={plan!.profile} go={go} selected={compareIds.includes(detail.universityId)} toggle={toggleCompare} />
@@ -219,7 +243,7 @@ function UniversityCard({ row, go, selected, toggle }: { row: Recommendation; go
     </div>
   </article>;
 }
-function Discover({ rows, hasProfile, go, selected, toggle }: { rows: Recommendation[]; hasProfile: boolean; go: (path: string) => void; selected: string[]; toggle: (id: string) => void }) {
+function Discover({ rows, hasProfile, go, selected, toggle, refresh, busy }: { rows: Recommendation[]; hasProfile: boolean; go: (path: string) => void; selected: string[]; toggle: (id: string) => void; refresh: () => Promise<void>; busy: boolean }) {
   const [query, setQuery] = useState("");
   const [max, setMax] = useState(100000);
   const filtered = rows.filter((row) => {
@@ -227,7 +251,17 @@ function Discover({ rows, hasProfile, go, selected, toggle }: { rows: Recommenda
     const text = `${u.name} ${u.city ?? ""} ${u.state ?? ""} ${u.programs.map((program) => fields[program.field]).join(" ")}`.toLowerCase();
     return text.includes(query.toLowerCase()) && (u.tuitionOutOfStateUsd === undefined || u.tuitionOutOfStateUsd <= max);
   });
-  return <section><PageHead eyebrow="Подбор" title="Университеты под ваш профиль" text="Оценка показывает соответствие профилю, а не вероятность поступления. Уточняйте стоимость и условия на сайте университета." />{rows.length ? <><div className="search"><span className="searchIcon" /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Название, город или направление" aria-label="Поиск университетов" /></div><div className="discoverGrid"><aside className="filters"><div><b>Фильтры</b><button className="textBtn" onClick={() => { setQuery(""); setMax(100000); }}>Сбросить</button></div><label>Максимальная стоимость обучения: {money(max)}<input type="range" min="0" max="100000" step="1000" value={max} onChange={(event) => setMax(Number(event.target.value))} /></label><div className="filterNote">Показаны программы бакалавриата в США по выбранному направлению.</div></aside><div><div className="resultBar"><b>{filtered.length} университетов</b><span>Сначала наиболее подходящие</span></div><div className="cards results">{filtered.map((row) => <UniversityCard key={row.universityId} row={row} go={go} selected={selected.includes(row.universityId)} toggle={toggle} />)}</div>{!filtered.length && <Empty title="Ничего не найдено" text="Измените запрос или расширьте фильтр стоимости." />}</div></div></> : <Empty title={hasProfile ? "По этому направлению пока нет вариантов" : "Сначала заполните профиль"} text={hasProfile ? "Попробуйте другое направление или уточните профиль." : "Рекомендации рассчитываются по вашим данным."} action={hasProfile ? "Изменить профиль" : "Заполнить профиль"} onClick={() => go("/profile")} />}</section>;
+  const source = rows[0]?.university.provider === "demo" ? "Демонстрационные данные" : "Данные College Scorecard";
+  return <section>
+    <PageHead eyebrow="Подбор" title="Университеты под ваш профиль" text="Оценка показывает соответствие профилю, а не вероятность поступления. Уточняйте стоимость и условия на сайте университета." />
+    {hasProfile && <div className="refreshBar"><span>{rows.length ? `${source} · подбор сохранён в вашем плане` : "Рекомендаций пока нет"}</span><button className="textBtn" disabled={busy} onClick={() => void refresh()}>{busy ? "Обновляем…" : "Обновить подбор ↻"}</button></div>}
+    {rows.length ? <>
+      <div className="search"><span className="searchIcon" /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Поиск по подбору: название или город" aria-label="Поиск университетов" /></div>
+      <div className="discoverGrid"><aside className="filters"><div><b>Фильтры</b><button className="textBtn" onClick={() => { setQuery(""); setMax(100000); }}>Сбросить</button></div><label>Максимальная стоимость обучения: {money(max)}<input type="range" min="0" max="100000" step="1000" value={max} onChange={(event) => setMax(Number(event.target.value))} /></label><div className="filterNote">Показаны программы бакалавриата в США по выбранному направлению.</div></aside>
+        <div><div className="resultBar"><b>{filtered.length} университетов</b><span>Сначала наиболее подходящие</span></div><div className="cards results">{filtered.map((row) => <UniversityCard key={row.universityId} row={row} go={go} selected={selected.includes(row.universityId)} toggle={toggle} />)}</div>{!filtered.length && <Empty title="Ничего не найдено" text="Измените запрос или расширьте фильтр стоимости." />}</div>
+      </div>
+    </> : <Empty title={hasProfile ? "По этому направлению пока нет вариантов" : "Сначала заполните профиль"} text={hasProfile ? "Попробуйте другое направление или уточните профиль." : "Рекомендации рассчитываются по вашим данным."} action={hasProfile ? "Изменить профиль" : "Заполнить профиль"} onClick={() => go("/profile")} />}
+  </section>;
 }
 
 function UniversityPage({ row, profile, go, selected, toggle }: { row: Recommendation; profile: StudentProfile; go: (path: string) => void; selected: boolean; toggle: (id: string) => void }) {

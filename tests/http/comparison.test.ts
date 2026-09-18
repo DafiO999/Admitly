@@ -21,7 +21,7 @@ describe('POST /api/comparison', () => {
         });
         expect(response.statusCode).toBe(200);
         const body = response.json();
-        expect(body.engineVersion).toBe('1.0.0');
+        expect(body.engineVersion).toBe('1.1.0');
         expect(body.comparisons.map((item: { university: { id: string } }) => item.university.id)).toEqual(ids);
         expect(body.comparisons[0]).toMatchObject({
           recommendation: { fitScore: expect.any(Number), components: expect.any(Array) },

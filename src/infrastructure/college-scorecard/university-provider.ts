@@ -12,13 +12,21 @@ const FIELDS = [
   'student.size', 'admissions.admission_rate.overall',
   'cost.tuition.out_of_state', 'cost.avg_net_price.overall',
 ];
+const FIELD_CIP_FILTER: Record<Exclude<NonNullable<UniversitySearchInput['field']>, 'other'>, [string, string]> = {
+  computer_science: ['latest.programs.cip_4_digit.code__range', '1100..1199'],
+  engineering: ['latest.programs.cip_4_digit.code__range', '1400..1499'],
+  business: ['latest.programs.cip_4_digit.code__range', '5200..5299'],
+  economics: ['latest.programs.cip_4_digit.code', '4506'],
+  design: ['latest.programs.cip_4_digit.code', '5004'],
+};
 
 const searchSchema = z.object({
   state: z.string().regex(/^[A-Z]{2}$/).optional(),
+  states: z.array(z.string().regex(/^[A-Z]{2}$/)).min(1).max(10).optional(),
   field: z.enum(['computer_science', 'engineering', 'business', 'economics', 'design', 'other']).optional(),
   limit: z.number().int().min(1).max(100).optional(),
   year: z.number().int().min(2000).max(2100).optional(),
-}).strict();
+}).strict().refine((input) => !input.state || !input.states, { message: 'Choose state or states' });
 
 export interface CollegeScorecardOptions {
   apiKey: string;
@@ -44,11 +52,19 @@ export class CollegeScorecardProvider implements UniversityProvider {
   async search(input: UniversitySearchInput): Promise<University[]> {
     const parsed = searchSchema.safeParse(input);
     if (!parsed.success) throw new UniversityProviderError('INVALID_REQUEST');
-    const { state, field, limit = 20, year } = parsed.data;
+    const { state, states, field, limit = 20, year } = parsed.data;
     const url = this.createUrl(year);
     url.searchParams.set('per_page', String(limit));
     if (state) url.searchParams.set('school.state', state);
+    else if (states) url.searchParams.set('school.state', states.join(','));
     else url.searchParams.set('sort', 'latest.student.size:desc');
+    // Filter within the nested program array before pagination; otherwise only the
+    // first few large institutions are ever considered for every profile.
+    url.searchParams.set('latest.programs.cip_4_digit.credential.level', '3');
+    if (field && field !== 'other') {
+      const [parameter, value] = FIELD_CIP_FILTER[field];
+      url.searchParams.set(parameter, value);
+    }
     const rows = await this.request(url);
     const universities = rows.flatMap((row) => {
       const university = mapScorecardUniversity(row, year);

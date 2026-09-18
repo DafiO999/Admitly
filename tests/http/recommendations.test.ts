@@ -13,7 +13,7 @@ describe('POST /api/recommendations', () => {
       });
       expect(response.statusCode).toBe(200);
       const body = response.json();
-      expect(body.engineVersion).toBe('1.0.0');
+      expect(body.engineVersion).toBe('1.1.0');
       expect(body.recommendations.length).toBeGreaterThanOrEqual(3);
       expect(body.recommendations[0]).toMatchObject({
         universityId: expect.any(String), university: { provider: 'demo' },
@@ -53,7 +53,7 @@ describe('POST /api/recommendations', () => {
         payload: { profile: { ...canonicalDemoProfile, targetField: 'other' } },
       });
       expect(response.statusCode).toBe(200);
-      expect(response.json()).toEqual({ engineVersion: '1.0.0', recommendations: [] });
+      expect(response.json()).toEqual({ engineVersion: '1.1.0', recommendations: [] });
     } finally {
       await app.close();
     }

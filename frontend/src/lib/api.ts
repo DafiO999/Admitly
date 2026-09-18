@@ -1,4 +1,6 @@
 export type StudyField = "computer_science" | "engineering" | "business" | "economics" | "design" | "other";
+// Increment alongside the backend version when saved recommendation snapshots need refreshing.
+export const RECOMMENDATION_ENGINE_VERSION = "1.1.0";
 export type ExamStatus = "not_planned" | "planned" | "taken";
 export type RoadmapStatus = "pending" | "in_progress" | "done" | "blocked";
 export type SourceStatus = "official" | "verified" | "demo" | "unknown";

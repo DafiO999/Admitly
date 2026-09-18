@@ -20,7 +20,7 @@ describe('comparison service', () => {
     const expected = rankUniversities(canonicalDemoProfile, demoUniversities)
       .filter((item) => ids.includes(item.universityId));
 
-    expect(result.engineVersion).toBe('1.0.0');
+    expect(result.engineVersion).toBe('1.1.0');
     expect(result.comparisons.map((item) => item.university.id)).toEqual(ids);
     for (const item of result.comparisons) {
       const ranked = expected.find((candidate) => candidate.universityId === item.university.id)!;

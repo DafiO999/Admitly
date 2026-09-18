@@ -40,6 +40,10 @@ Open `http://localhost:3000`. Next.js forwards `/api/*` to the API at
 and task progress live in PostgreSQL. Browser storage keeps only the profile
 ID and theme. University photos reuse Atlas's decorative images; live facts and
 public source links come from College Scorecard.
+The backend filters Scorecard by matching bachelor programs before ranking up to
+30 universities. Preferred states add another candidate pool. Recommendations
+are saved with the plan; the frontend refreshes older snapshots after an engine
+update, and **Обновить подбор** on the university page requests current data.
 
 ## Backend API
 

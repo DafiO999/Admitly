@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { rankUniversities, scoreBudget } from '../../src/domain/recommendation/engine.js';
 import { recommendedUniversitySchema } from '../../src/domain/recommendation/schema.js';
-import { RECOMMENDATION_WEIGHTS } from '../../src/domain/recommendation/weights.js';
+import { MAX_RECOMMENDATIONS, RECOMMENDATION_WEIGHTS } from '../../src/domain/recommendation/weights.js';
 import { universitySchema } from '../../src/domain/university/schema.js';
 import { canonicalDemoProfile, demoUniversities } from '../../src/infrastructure/demo/fixtures.js';
 
@@ -37,6 +37,15 @@ describe('recommendation engine', () => {
     const reversed = rankUniversities(canonicalDemoProfile, [...demoUniversities].reverse())
       .map((item) => item.universityId);
     expect(reversed).toEqual(normal);
+  });
+
+  it('offers more than five schools when the provider has enough matches', () => {
+    const candidates = Array.from({ length: 40 }, (_, index) => ({
+      ...demoUniversities[0]!, id: `school-${index}`, name: `School ${index}`,
+    }));
+    const results = rankUniversities(canonicalDemoProfile, candidates);
+    expect(results).toHaveLength(MAX_RECOMMENDATIONS);
+    expect(new Set(results.map((item) => item.universityId)).size).toBe(MAX_RECOMMENDATIONS);
   });
 
   it('uses name and then ID for complete score ties', () => {

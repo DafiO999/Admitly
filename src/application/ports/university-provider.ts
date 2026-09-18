@@ -3,6 +3,7 @@ import type { University } from '../../domain/university/schema.js';
 
 export interface UniversitySearchInput {
   state?: string;
+  states?: string[];
   field?: StudyField;
   limit?: number;
   year?: number;

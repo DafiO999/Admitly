@@ -5,4 +5,4 @@ export const RECOMMENDATION_WEIGHTS = {
   preferences: 15,
 } as const;
 
-export const MAX_RECOMMENDATIONS = 5;
+export const MAX_RECOMMENDATIONS = 30;

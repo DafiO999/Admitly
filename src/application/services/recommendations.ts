@@ -10,7 +10,10 @@ export const recommendationRequestSchema = z.object({ profile: studentProfileSch
 export async function createRecommendations(input: unknown, providerFactory: () => UniversityProvider) {
   const { profile } = recommendationRequestSchema.parse(input);
   const provider = providerFactory();
-  const result = universitySchema.array().safeParse(await provider.search({ field: profile.targetField, limit: 20 }));
+  const general = await provider.search({ field: profile.targetField, limit: 100 });
+  const preferred = profile.preferredStates?.length
+    ? await provider.search({ field: profile.targetField, states: profile.preferredStates, limit: 100 }) : [];
+  const result = universitySchema.array().safeParse([...general, ...preferred]);
   if (!result.success) throw new UniversityProviderError('INVALID_RESPONSE');
   return {
     engineVersion: RECOMMENDATION_ENGINE_VERSION,

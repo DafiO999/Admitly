@@ -69,12 +69,25 @@ describe('university providers', () => {
     expect(universities[0]).not.toHaveProperty('satMedian');
   });
 
-  it('samples large universities across the US when no state is chosen', async () => {
+  it('filters bachelor programs before sampling large universities across the US', async () => {
     const fetcher = vi.fn<typeof fetch>().mockResolvedValue(response([scorecardRow]));
     const provider = new CollegeScorecardProvider({ apiKey: 'private-key', fetcher });
     await provider.search({ field: 'computer_science', limit: 20 });
-    expect(new URL(String(fetcher.mock.calls[0]?.[0])).searchParams.get('sort'))
-      .toBe('latest.student.size:desc');
+    const params = new URL(String(fetcher.mock.calls[0]?.[0])).searchParams;
+    expect(params.get('sort')).toBe('latest.student.size:desc');
+    expect(params.get('latest.programs.cip_4_digit.code__range')).toBe('1100..1199');
+    expect(params.get('latest.programs.cip_4_digit.credential.level')).toBe('3');
+  });
+
+  it('searches selected states together for matching bachelor programs', async () => {
+    const fetcher = vi.fn<typeof fetch>().mockResolvedValue(response([scorecardRow]));
+    const provider = new CollegeScorecardProvider({ apiKey: 'private-key', fetcher });
+    await provider.search({ field: 'computer_science', states: ['MA', 'CA'], limit: 100 });
+    const params = new URL(String(fetcher.mock.calls[0]?.[0])).searchParams;
+    expect(params.get('school.state')).toBe('MA,CA');
+    expect(params.get('per_page')).toBe('100');
+    expect(params.get('sort')).toBeNull();
+    await expect(provider.search({ state: 'MA', states: ['CA'] })).rejects.toMatchObject({ code: 'INVALID_REQUEST' });
   });
 
   it('does not invent a single data year for latest fields', () => {

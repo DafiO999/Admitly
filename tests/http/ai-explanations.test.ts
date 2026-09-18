@@ -115,7 +115,7 @@ describe('optional AI explanations', () => {
       });
       expect(response.statusCode).toBe(200);
       expect(response.json()).toMatchObject({
-        universityId: 'demo-redwood-state', engineVersion: '1.0.0',
+        universityId: 'demo-redwood-state', engineVersion: '1.1.0',
         mode: 'gemini', promptVersion: '1.0.0',
         explanation: { summary: 'The reported bachelor program matches the target field.' },
       });
