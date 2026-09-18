@@ -59,3 +59,16 @@ require_running_database() {
   [[ -n $id ]] || die 'Database service is not running'
   [[ $(health_status "$id") == healthy ]] || die 'Database service is not healthy'
 }
+
+validate_upload_archive() {
+  local archive=$1
+  tar -tf "$archive" >/dev/null || die 'Uploads archive is not a valid tar file'
+  local entry line
+  while IFS= read -r entry; do
+    [[ $entry == ./ || $entry =~ ^\./[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}(\.deleting-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})?$ ]] \
+      || die 'Uploads archive contains an unexpected path'
+  done < <(tar -tf "$archive")
+  while IFS= read -r line; do
+    [[ $line == -* || $line == d* ]] || die 'Uploads archive contains a link or special file'
+  done < <(tar -tvf "$archive")
+}

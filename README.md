@@ -151,14 +151,13 @@ database readiness. It does not remove named volumes. Caddy routes `/api/*` to
 the API and all other paths to the frontend.
 
 For a coherent database and attachment backup, stop the application services,
-then run both backup scripts before restarting them. They save a PostgreSQL dump
-and an uploads archive under the ignored `backups/` directory. Set `BACKUP_DIR`
+then run the paired backup command before restarting them. It saves a PostgreSQL dump
+and an uploads archive with the same timestamp under the ignored `backups/` directory. Set `BACKUP_DIR`
 to choose another host directory and copy both files off the server.
 
 ```bash
 docker compose -p admitly -f deploy/compose.prod.yml --env-file deploy/.env.production stop api web caddy
-bash deploy/scripts/backup-db.sh
-bash deploy/scripts/backup-uploads.sh
+bash deploy/scripts/backup-all.sh
 bash deploy/scripts/deploy.sh
 ```
 

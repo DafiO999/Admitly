@@ -25,14 +25,7 @@ for service in api web caddy; do
   fi
 done
 
-tar -tf "$backup_path" >/dev/null || die 'Uploads backup is not a valid tar archive'
-while IFS= read -r entry; do
-  [[ $entry == ./ || $entry =~ ^\./[0-9a-f-]{36}(\.deleting-[0-9a-f-]{36})?$ ]] \
-    || die 'Uploads backup contains an unexpected path'
-done < <(tar -tf "$backup_path")
-while IFS= read -r line; do
-  [[ $line == -* || $line == d* ]] || die 'Uploads backup contains a link or special file'
-done < <(tar -tvf "$backup_path")
+validate_upload_archive "$backup_path"
 
 docker run --rm --network none --mount "type=volume,source=$volume,target=/uploads" \
   alpine:3.20 sh -c 'find /uploads -mindepth 1 -maxdepth 1 -exec rm -rf -- {} +' \

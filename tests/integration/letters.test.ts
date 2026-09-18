@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { mkdtemp, readdir, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { Writable } from 'node:stream';
 import { describe, expect, it } from 'vitest';
 import { buildApp } from '../../src/app.js';
 import type { LetterDraftProvider } from '../../src/application/ports/letter-draft-provider.js';
@@ -88,6 +89,11 @@ describe('admission letter persistence and routes', () => {
     let sendGate: Promise<void> | null = null;
     let onSendStarted: (() => void) | null = null;
     let sendFailure: Error | null = null;
+    const logs: string[] = [];
+    const logStream = new Writable({ write(chunk, _encoding, callback) {
+      logs.push(String(chunk));
+      callback();
+    } });
     const mailProvider: MailProvider = { send: async (input) => {
       sendCount += 1;
       const files = [];
@@ -103,7 +109,7 @@ describe('admission letter persistence and routes', () => {
       if (sendGate) await sendGate;
       return { providerMessageId: `<smtp-${sendCount}@example.test>` };
     } };
-    const app = buildApp({}, {
+    const app = buildApp({ logger: { stream: logStream } }, {
       contactRepository: contacts, letterRepository: letters, letterDraftProvider: provider,
       planRepository: plans,
       attachmentRepository: attachments, deliveryRepository: delivery, fileStorage: storage,
@@ -360,6 +366,7 @@ describe('admission letter persistence and routes', () => {
       expect(replay.statusCode).toBe(200);
       expect(replay.json()).toEqual(sent.json());
       expect(sendCount).toBe(1);
+      expect(await client.letterSendAttempt.count({ where: { letterId, status: 'accepted' } })).toBe(1);
       const anotherKey = await app.inject({ method: 'POST', url: `/api/letters/${letterId}/send`,
         headers: { 'idempotency-key': 'different-key' } });
       expect(anotherKey.json().error.code).toBe('LETTER_ALREADY_SENT');
@@ -396,6 +403,8 @@ describe('admission letter persistence and routes', () => {
       sendGate = null;
       onSendStarted = null;
       expect(sendCount).toBe(2);
+      expect(await client.letterSendAttempt.count({ where: { letterId: secondId, status: 'accepted' } }))
+        .toBe(1);
 
       const failedLetter = await app.inject({ method: 'POST', url: createUrl, payload: createBody });
       const failedId = failedLetter.json().letter.id as string;
@@ -418,6 +427,13 @@ describe('admission letter persistence and routes', () => {
         headers: { 'idempotency-key': 'ambiguous-key' } });
       expect(failedReplay.statusCode).toBe(502);
       expect(sendCount).toBe(3);
+      expect(await client.letterSendAttempt.count({ where: { letterId: failedId, status: 'ambiguous' } }))
+        .toBe(1);
+      const safeLogs = logs.join('');
+      for (const privateValue of ['private SMTP diagnostic', 'My edited final text',
+        'private certificate', 'alex@example.com', 'admissions@example.edu']) {
+        expect(safeLogs).not.toContain(privateValue);
+      }
 
       const makeSelectedDraft = async (body: string) => {
         const createdLetter = await app.inject({ method: 'POST', url: createUrl, payload: createBody });

@@ -8,7 +8,9 @@ require_running_database
 umask 077
 BACKUP_DIR=${BACKUP_DIR:-"$DEPLOY_DIR/../backups"}
 mkdir -p -- "$BACKUP_DIR"
-timestamp=$(date -u +%Y-%m-%d_%H-%M-%S)
+timestamp=${BACKUP_TIMESTAMP:-$(date -u +%Y-%m-%d_%H-%M-%S)}
+[[ $timestamp =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}_[0-9]{2}-[0-9]{2}-[0-9]{2}$ ]] \
+  || die 'Invalid backup timestamp'
 backup_path="$BACKUP_DIR/admitly_${timestamp}.dump"
 [[ ! -e $backup_path ]] || die 'A backup with this timestamp already exists'
 temporary_path="${backup_path}.partial.$$"

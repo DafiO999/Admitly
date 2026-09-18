@@ -10,6 +10,18 @@ describe('generated API contract', () => {
     const committed = JSON.parse(await readFile(new URL('../../openapi/openapi.json', import.meta.url), 'utf8'));
     expect(committed).toEqual(document);
 
+    const send = committed.paths['/api/letters/{letterId}/send'].post;
+    expect(send.parameters).toContainEqual(expect.objectContaining({
+      name: 'Idempotency-Key', in: 'header', required: true,
+    }));
+    expect(send.requestBody).toBeUndefined();
+    const roadmapItem = committed.components.schemas.RoadmapResponse.properties.roadmap
+      .properties.items.items;
+    expect(roadmapItem.properties.category.enum).toContain('university_email');
+    expect(Object.keys(roadmapItem.properties.letter.properties).sort())
+      .toEqual(['body', 'recipientEmail', 'universityId']);
+    expect(JSON.stringify(committed.components.schemas.AttachmentUploadResponse)).not.toContain('storageKey');
+
     const routes = [
       ['GET', apiPaths.health], ['GET', apiPaths.ready], ['POST', apiPaths.diagnosis],
       ['POST', apiPaths.recommendations], ['POST', apiPaths.recommendationExplanation],

@@ -18,7 +18,9 @@ docker volume inspect "$volume" >/dev/null 2>&1 || die 'Uploads volume is missin
 umask 077
 BACKUP_DIR=${BACKUP_DIR:-"$DEPLOY_DIR/../backups"}
 mkdir -p -- "$BACKUP_DIR"
-timestamp=$(date -u +%Y-%m-%d_%H-%M-%S)
+timestamp=${BACKUP_TIMESTAMP:-$(date -u +%Y-%m-%d_%H-%M-%S)}
+[[ $timestamp =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}_[0-9]{2}-[0-9]{2}-[0-9]{2}$ ]] \
+  || die 'Invalid backup timestamp'
 backup_path="$BACKUP_DIR/admitly_${timestamp}.uploads.tar"
 [[ ! -e $backup_path ]] || die 'An uploads backup with this timestamp already exists'
 temporary_path="${backup_path}.partial.$$"
@@ -29,7 +31,7 @@ docker run --rm --network none \
   alpine:3.20 tar -C /uploads -cf - . > "$temporary_path" \
   || die 'Uploads backup failed'
 [[ -s $temporary_path ]] || die 'Uploads backup was empty'
-tar -tf "$temporary_path" >/dev/null || die 'Uploads backup validation failed'
+validate_upload_archive "$temporary_path"
 
 mv -- "$temporary_path" "$backup_path"
 trap - EXIT
