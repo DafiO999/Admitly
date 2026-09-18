@@ -60,6 +60,15 @@ Contacts are stored in PostgreSQL with an HTTPS source URL and verification
 timestamp. The demo seed contains no admissions addresses because its schools
 are fictional; only independently verified real contacts should be curated
 through the backend repository. The API does not accept a recipient override.
+`POST /api/universities/:universityId/letters` creates a letter for a saved
+profile and selects its verified contact server-side. With `GEMINI_API_KEY`,
+`POST /api/letters/:letterId/drafts` requests concise, balanced, and detailed
+drafts. Draft wording is limited to sentences assembled from the saved profile,
+university, sender name, and optional student context; unsupported model claims
+are rejected. Each successful generation keeps an immutable input and variant
+snapshot. `PUT /api/letters/:letterId/content` stores a separately editable
+final subject and body based on a variant from that letter. These endpoints do
+not send email.
 Set `GEMINI_API_KEY` to enable optional Gemini wording. Pass
 `enhanceWithAi: true` to `POST /api/diagnosis`, or call
 `POST /api/recommendations/:universityId/explanation` with a profile. Both

@@ -1,6 +1,8 @@
 import Fastify, { LogController, type FastifyServerOptions } from 'fastify';
 import type { UniversityProvider } from './application/ports/university-provider.js';
 import type { UniversityContactRepository } from './application/ports/university-contact-repository.js';
+import type { LetterRepository } from './application/ports/letter-repository.js';
+import type { LetterDraftProvider } from './application/ports/letter-draft-provider.js';
 import type { AdmissionRequirementProvider } from './application/ports/admission-requirement-provider.js';
 import type { AiProvider } from './application/ports/ai-provider.js';
 import { DatabaseUnavailableError, type PlanRepository } from './application/ports/plan-repository.js';
@@ -8,6 +10,7 @@ import { loadEnvironment } from './config/env.js';
 import { registerErrorHandlers } from './http/errors/handler.js';
 import { comparisonRoutes } from './http/routes/comparison.js';
 import { admissionsContactRoutes } from './http/routes/admissions-contact.js';
+import { letterRoutes } from './http/routes/letters.js';
 import { diagnosisRoutes } from './http/routes/diagnosis.js';
 import { healthRoutes } from './http/routes/health.js';
 import { planPersistenceRoutes } from './http/routes/plan-persistence.js';
@@ -19,6 +22,8 @@ import { createUniversityProvider } from './infrastructure/university-provider.j
 import { createPrismaClient } from './infrastructure/db/prisma/client.js';
 import { PrismaPlanRepository } from './infrastructure/db/repositories/prisma-plan-repository.js';
 import { PrismaUniversityContactRepository } from './infrastructure/db/repositories/prisma-university-contact-repository.js';
+import { PrismaLetterRepository } from './infrastructure/db/repositories/prisma-letter-repository.js';
+import { createLetterDraftProvider } from './infrastructure/letter-draft-provider.js';
 
 export function buildApp(
   options: FastifyServerOptions = {},
@@ -28,6 +33,8 @@ export function buildApp(
     aiProvider?: AiProvider | null;
     planRepository?: PlanRepository;
     contactRepository?: UniversityContactRepository;
+    letterRepository?: LetterRepository;
+    letterDraftProvider?: LetterDraftProvider | null;
     readinessCheck?: () => Promise<void>;
   } = {},
 ) {
@@ -37,6 +44,7 @@ export function buildApp(
   let databaseClient: ReturnType<typeof createPrismaClient> | undefined;
   let planRepository: PlanRepository | undefined;
   let contactRepository: UniversityContactRepository | undefined;
+  let letterRepository: LetterRepository | undefined;
   const databaseClientFactory = () => {
     if (databaseClient) return databaseClient;
     const databaseUrl = loadEnvironment(process.env).DATABASE_URL;
@@ -56,6 +64,14 @@ export function buildApp(
     contactRepository = new PrismaUniversityContactRepository(databaseClientFactory());
     return contactRepository;
   };
+  const letterRepositoryFactory = () => {
+    if (dependencies.letterRepository) return dependencies.letterRepository;
+    if (letterRepository) return letterRepository;
+    letterRepository = new PrismaLetterRepository(databaseClientFactory());
+    return letterRepository;
+  };
+  const letterDraftProviderFactory = () => dependencies.letterDraftProvider === undefined
+    ? createLetterDraftProvider(loadEnvironment(process.env)) : dependencies.letterDraftProvider;
   const checkReadiness = dependencies.readinessCheck ?? (async () => {
     try {
       const client = databaseClientFactory();
@@ -69,6 +85,7 @@ export function buildApp(
   registerErrorHandlers(app);
   app.register(healthRoutes(checkReadiness));
   app.register(admissionsContactRoutes(contactRepositoryFactory));
+  app.register(letterRoutes(contactRepositoryFactory, letterRepositoryFactory, letterDraftProviderFactory));
   app.register(diagnosisRoutes(aiProviderFactory));
   app.register(recommendationRoutes(
     () => dependencies.universityProvider ?? createUniversityProvider(loadEnvironment(process.env)),

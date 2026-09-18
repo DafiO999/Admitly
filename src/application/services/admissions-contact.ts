@@ -15,16 +15,24 @@ const contactPriority: Record<UniversityContact['kind'], number> = {
   general_admissions: 2,
 };
 
-export async function resolveAdmissionsContact(
+export async function findSendableContact(
   universityId: unknown,
   repositoryFactory: () => UniversityContactRepository,
-): Promise<{ contact: Pick<UniversityContact, 'universityId' | 'kind' | 'email' | 'sourceUrl' | 'sourceStatus' | 'verifiedAt'> }> {
+): Promise<UniversityContact> {
   const id = z.string().min(1).parse(universityId);
   const contacts = await repositoryFactory().findByUniversityId(id);
   const contact = contacts.filter((item) => item.universityId === id && isSendableContact(item))
     .sort((a, b) => contactPriority[a.kind] - contactPriority[b.kind]
       || b.verifiedAt.localeCompare(a.verifiedAt) || a.id.localeCompare(b.id))[0];
   if (!contact) throw new UniversityEmailUnavailableError();
+  return contact;
+}
+
+export async function resolveAdmissionsContact(
+  universityId: unknown,
+  repositoryFactory: () => UniversityContactRepository,
+): Promise<{ contact: Pick<UniversityContact, 'universityId' | 'kind' | 'email' | 'sourceUrl' | 'sourceStatus' | 'verifiedAt'> }> {
+  const contact = await findSendableContact(universityId, repositoryFactory);
   return { contact: {
     universityId: contact.universityId,
     kind: contact.kind,

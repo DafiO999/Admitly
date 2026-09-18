@@ -7,6 +7,8 @@ import {
 import { explanationRequestSchema } from '../application/services/recommendation-explanation.js';
 import { recommendationRequestSchema } from '../application/services/recommendations.js';
 import { roadmapRequestSchema } from '../application/services/roadmap.js';
+import { createLetterRequestSchema, generateLetterDraftsRequestSchema, letterContentRequestSchema,
+  letterPurposeSchema, letterStatusSchema, letterVariantTypeSchema } from '../domain/letter/schema.js';
 import { diagnosisSchema } from '../domain/diagnosis/schema.js';
 import { studentProfileSchema } from '../domain/profile/schema.js';
 import { recommendationExplanationSchema, recommendationSchema, recommendedUniversitySchema } from '../domain/recommendation/schema.js';
@@ -25,7 +27,8 @@ const json = (schema: z.ZodType) => {
 const errorSchema = z.object({
   error: z.object({
     code: z.enum(['VALIDATION', 'REQUEST_TOO_LARGE', 'NOT_FOUND', 'CONFLICT',
-      'EXTERNAL_UNAVAILABLE', 'DATABASE_UNAVAILABLE', 'INTERNAL', 'UNIVERSITY_EMAIL_UNAVAILABLE']),
+      'EXTERNAL_UNAVAILABLE', 'DATABASE_UNAVAILABLE', 'INTERNAL', 'UNIVERSITY_EMAIL_UNAVAILABLE',
+      'LETTER_NOT_FOUND', 'LETTER_NOT_EDITABLE', 'INVALID_REPLY_TO', 'AI_DRAFT_GENERATION_FAILED']),
     message: z.string(),
     details: z.array(z.unknown()),
   }).strict(),
@@ -52,6 +55,19 @@ const admissionsContactResponseSchema = z.object({
     universityId: true, kind: true, email: true, sourceUrl: true,
     sourceStatus: true, verifiedAt: true,
   }),
+}).strict();
+const letterRecordSchema = z.object({
+  id: z.uuid(), profileId: z.uuid(), universityId: z.string(), universityContactId: z.uuid(),
+  purpose: letterPurposeSchema, status: letterStatusSchema,
+  senderName: z.string(), replyToEmail: z.email(),
+  subject: z.string().nullable(), body: z.string().nullable(), selectedVariantId: z.uuid().nullable(),
+  createdAt: z.iso.datetime(), updatedAt: z.iso.datetime(),
+}).strict();
+const letterGenerationResponseSchema = z.object({
+  generationId: z.uuid(), promptVersion: z.string(),
+  variants: z.array(z.object({
+    id: z.uuid(), variant: letterVariantTypeSchema, subject: z.string(), body: z.string(),
+  }).strict()).length(3),
 }).strict();
 const roadmapResponseSchema = z.object({
   roadmap: roadmapSchema, sourceCoverage: sourceCoverageSchema,
@@ -86,6 +102,12 @@ const schemas = {
   ComparisonRequest: comparisonRequestSchema,
   ComparisonResponse: comparisonResponseSchema,
   AdmissionsContactResponse: admissionsContactResponseSchema,
+  CreateLetterRequest: createLetterRequestSchema,
+  CreateLetterResponse: z.object({ letter: letterRecordSchema, recipientEmail: z.email() }).strict(),
+  LetterDraftsRequest: generateLetterDraftsRequestSchema,
+  LetterDraftsResponse: letterGenerationResponseSchema,
+  LetterContentRequest: letterContentRequestSchema,
+  LetterContentResponse: z.object({ letter: letterRecordSchema }).strict(),
   RoadmapRequest: roadmapRequestSchema,
   RoadmapResponse: roadmapResponseSchema,
   SaveProfileRequest: saveProfileRequestSchema,
@@ -107,7 +129,7 @@ function operation(
     summary,
     ...(params.length ? { parameters: params.map((name) => ({
       name, in: 'path', required: true,
-      schema: json(name === 'profileId' || name === 'roadmapId' ? z.uuid() : z.string().min(1)),
+      schema: json(name === 'profileId' || name === 'roadmapId' || name === 'letterId' ? z.uuid() : z.string().min(1)),
     })) } : {}),
     ...(request ? { requestBody: {
       required: true, content: { 'application/json': { schema: ref(request) } },
@@ -145,6 +167,15 @@ export function generateOpenApiDocument() {
       [path(apiPaths.admissionsContact)]: { get: operation('getAdmissionsContact',
         'Get an active verified admissions contact', 'AdmissionsContactResponse',
         undefined, ['universityId'], [400, 404, 503]) },
+      [path(apiPaths.createLetter)]: { post: operation('createAdmissionLetter',
+        'Create an admission letter', 'CreateLetterResponse', 'CreateLetterRequest',
+        ['universityId'], [400, 404, 413, 503]) },
+      [path(apiPaths.letterDrafts)]: { post: operation('generateAdmissionLetterDrafts',
+        'Generate three grounded letter drafts', 'LetterDraftsResponse', 'LetterDraftsRequest',
+        ['letterId'], [400, 404, 409, 413, 502, 503]) },
+      [path(apiPaths.letterContent)]: { put: operation('selectAdmissionLetterContent',
+        'Select and edit final letter content', 'LetterContentResponse', 'LetterContentRequest',
+        ['letterId'], [400, 404, 409, 413, 503]) },
       [path(apiPaths.roadmap)]: { post: operation('createRoadmap', 'Build a roadmap',
         'RoadmapResponse', 'RoadmapRequest', [], [400, 404, 413, 422, 502, 503]) },
       [path(apiPaths.profile)]: { put: operation('saveProfile', 'Save a profile and plan',

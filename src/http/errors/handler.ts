@@ -7,9 +7,12 @@ import { ComparisonUniversityNotFoundError } from '../../application/services/co
 import { RecommendationNotFoundError } from '../../application/services/recommendation-explanation.js';
 import { RoadmapProgramMismatchError, RoadmapUniversityNotFoundError } from '../../application/services/roadmap.js';
 import { UniversityEmailUnavailableError } from '../../application/services/admissions-contact.js';
+import { LetterNotEditableError, LetterNotFoundError, LetterVariantNotFoundError } from '../../application/ports/letter-repository.js';
+import { AiDraftGenerationFailedError, InvalidReplyToError } from '../../application/services/letters.js';
 
 type ErrorCode = 'VALIDATION' | 'REQUEST_TOO_LARGE' | 'NOT_FOUND' | 'CONFLICT'
-  | 'EXTERNAL_UNAVAILABLE' | 'DATABASE_UNAVAILABLE' | 'INTERNAL' | 'UNIVERSITY_EMAIL_UNAVAILABLE';
+  | 'EXTERNAL_UNAVAILABLE' | 'DATABASE_UNAVAILABLE' | 'INTERNAL' | 'UNIVERSITY_EMAIL_UNAVAILABLE'
+  | 'LETTER_NOT_FOUND' | 'LETTER_NOT_EDITABLE' | 'INVALID_REPLY_TO' | 'AI_DRAFT_GENERATION_FAILED';
 
 function errorResponse(code: ErrorCode, message: string) {
   return { error: { code, message, details: [] } };
@@ -46,6 +49,22 @@ export function registerErrorHandlers(app: FastifyInstance): void {
 
     if (error instanceof UniversityEmailUnavailableError) {
       return send(404, 'UNIVERSITY_EMAIL_UNAVAILABLE', 'University admissions email unavailable');
+    }
+
+    if (error instanceof LetterNotFoundError || error instanceof LetterVariantNotFoundError) {
+      return send(404, 'LETTER_NOT_FOUND', 'Letter or variant not found');
+    }
+
+    if (error instanceof LetterNotEditableError) {
+      return send(409, 'LETTER_NOT_EDITABLE', 'Letter is not editable');
+    }
+
+    if (error instanceof InvalidReplyToError) {
+      return send(400, 'INVALID_REPLY_TO', 'Invalid reply-to email');
+    }
+
+    if (error instanceof AiDraftGenerationFailedError) {
+      return send(error.unavailable ? 503 : 502, 'AI_DRAFT_GENERATION_FAILED', 'AI draft generation failed');
     }
 
     if (error instanceof PlanConflictError) {

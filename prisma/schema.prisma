@@ -44,6 +44,31 @@ enum UniversityContactKind {
   general_admissions
 }
 
+enum AdmissionLetterPurpose {
+  admissions_inquiry
+  application_follow_up
+  document_submission
+  achievement_update
+  program_question
+  general
+}
+
+enum AdmissionLetterStatus {
+  created
+  drafts_generated
+  draft_selected
+  ready_to_send
+  sending
+  sent
+  failed
+}
+
+enum LetterVariantKind {
+  concise
+  balanced
+  detailed
+}
+
 enum RoadmapCategory {
   exam
   document
@@ -76,6 +101,7 @@ model Profile {
   updatedAt          DateTime            @updatedAt
   recommendationRuns RecommendationRun[]
   roadmaps           Roadmap[]
+  letters            AdmissionLetter[]
 
   @@index([profileHash])
   @@index([currentRoadmapId])
@@ -102,6 +128,7 @@ model University {
   updatedAt            DateTime               @updatedAt
   requirements         AdmissionRequirement[]
   contacts             UniversityContact[]
+  letters              AdmissionLetter[]
 
   @@index([name])
   @@index([state])
@@ -120,8 +147,59 @@ model UniversityContact {
   active       Boolean               @default(false)
   createdAt    DateTime              @default(now())
   updatedAt    DateTime              @updatedAt
+  letters      AdmissionLetter[]
 
   @@index([universityId, active])
+}
+
+model AdmissionLetter {
+  id                   String                @id @default(uuid()) @db.Uuid
+  profileId            String                @db.Uuid
+  profile              Profile               @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  universityId         String
+  university           University            @relation(fields: [universityId], references: [id], onDelete: Restrict)
+  universityContactId  String                @db.Uuid
+  universityContact    UniversityContact     @relation(fields: [universityContactId], references: [id], onDelete: Restrict)
+  purpose              AdmissionLetterPurpose
+  status               AdmissionLetterStatus @default(created)
+  senderName           String
+  replyToEmail         String
+  subject              String?
+  body                 String?
+  selectedVariantId    String?               @db.Uuid
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+  sentAt               DateTime?
+  generations          LetterGeneration[]
+
+  @@index([profileId, createdAt])
+  @@index([universityId, status])
+  @@index([universityContactId])
+}
+
+model LetterGeneration {
+  id                String          @id @default(uuid()) @db.Uuid
+  letterId          String          @db.Uuid
+  letter            AdmissionLetter @relation(fields: [letterId], references: [id], onDelete: Cascade)
+  promptVersion     String
+  additionalContext String?
+  inputSnapshot     Json
+  createdAt         DateTime        @default(now())
+  variants          LetterVariant[]
+
+  @@index([letterId, createdAt])
+}
+
+model LetterVariant {
+  id           String            @id @default(uuid()) @db.Uuid
+  generationId String            @db.Uuid
+  generation   LetterGeneration  @relation(fields: [generationId], references: [id], onDelete: Cascade)
+  variant      LetterVariantKind
+  subject      String
+  body         String
+  createdAt    DateTime          @default(now())
+
+  @@unique([generationId, variant])
 }
 
 model AdmissionRequirement {
