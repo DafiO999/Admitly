@@ -67,7 +67,7 @@ export function mapScorecardUniversity(value: unknown, year?: number): Universit
   const row = parsed.data;
   const prefix = year === undefined ? 'latest' : String(year);
   const id = String(row.id);
-  const sourceUrl = `https://api.data.gov/ed/collegescorecard/v1/schools?id=${id}`;
+  const sourceUrl = `https://collegescorecard.ed.gov/school/?${id}`;
   const programs = mapPrograms(row['latest.programs.cip_4_digit'], sourceUrl);
   if (programs.length === 0) return null;
 

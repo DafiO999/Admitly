@@ -1,4 +1,47 @@
-# Admitly backend
+# Admitly
+
+Admitly combines a Russian Next.js frontend in [`frontend/`](frontend/) with a
+Fastify API and PostgreSQL. The application supports US bachelor programs.
+
+## Local development
+
+Requires Node.js 20 or newer, pnpm, and Docker with Compose. In the repository
+root, prepare the database and install dependencies:
+
+```powershell
+if (-not (Test-Path .env)) { Copy-Item .env.example .env }
+pnpm install
+npm ci --prefix frontend
+docker compose -f compose.dev.yml up -d db
+pnpm db:migrate
+pnpm db:check
+```
+
+Set `DEMO_DATA_MODE=false` and `COLLEGE_SCORECARD_API_KEY` in the ignored `.env`
+to use live US university data. For offline fixture data, use
+`DEMO_DATA_MODE=true` and optionally run `pnpm db:seed`. If port 5432 is in use,
+set `ADMITLY_DEV_DB_PORT` and update both database URLs in `.env`.
+
+Start the API and frontend in separate terminals:
+
+```powershell
+# Terminal 1, repository root
+pnpm dev
+```
+
+```powershell
+# Terminal 2, repository root
+cd frontend
+npm run dev
+```
+
+Open `http://localhost:3000`. Next.js forwards `/api/*` to the API at
+`http://127.0.0.1:3001`; set `API_ORIGIN` for another backend address. Profile
+and task progress live in PostgreSQL. Browser storage keeps only the profile
+ID and theme. University photos reuse Atlas's decorative images; live facts and
+public source links come from College Scorecard.
+
+## Backend API
 
 Fastify and TypeScript service for the admission journey project. PostgreSQL,
 Prisma, domain contracts, and deterministic demo data are available for local
@@ -31,33 +74,20 @@ unit suite checks that the committed contract matches the generator and the
 registered routes. Runtime Zod validation also enforces cross-field rules
 that JSON Schema cannot express, such as a taken exam requiring a score.
 
-## Local run
-
-Requires Node.js 20 or newer and Docker with Compose. Run:
-
-```text
-pnpm install
-docker compose -f compose.dev.yml up -d db
-```
-
-Copy `.env.example` to `.env`, then run `pnpm db:migrate`, `pnpm db:seed`,
-`pnpm db:check`, and `pnpm dev`. The backend runs on the host, while Docker
-runs PostgreSQL. Set `ADMITLY_DEV_DB_PORT` and adjust both database URLs in
-`.env` if host port 5432 is unavailable. The default server listens on
-`127.0.0.1:3001`;
+The backend runs on the host, while Docker runs PostgreSQL. The default server
+listens on `127.0.0.1:3001`;
 `GET /api/health` is a liveness check; `GET /api/ready` verifies the PostgreSQL
 plan tables before returning `{"status":"ready"}`. JSON request bodies are
 limited to 128 KiB. Dependency installation generates Prisma Client; run
 `pnpm db:generate` after schema edits.
 
 The seed contains fictional universities and requirements marked `demo`.
-The university provider uses those fixtures when `DEMO_DATA_MODE=true`. With
-`DEMO_DATA_MODE=false`, it uses College Scorecard and needs
-`COLLEGE_SCORECARD_API_KEY`; no public provider endpoint is exposed yet.
+The university provider uses those fixtures when `DEMO_DATA_MODE=true`.
 
 The same package scripts work with npm (`npm run dev`, `npm run build`, etc.).
-Run `pnpm lint`, `pnpm typecheck`, `pnpm test`, and `pnpm build` for normal
-checks. `pnpm start` runs compiled JavaScript after a build.
+Run `pnpm lint`, `pnpm typecheck`, `pnpm test`, and `pnpm build` for backend
+checks. Run `npm run typecheck` and `npm run build` in `frontend/` for frontend
+checks. `pnpm start` runs compiled backend JavaScript after a build.
 
 ## Production image
 
@@ -72,14 +102,15 @@ runtime image includes the Prisma CLI and migrations for an explicit
 
 ## Production operations
 
-`deploy/compose.prod.yml` connects PostgreSQL to the API on a private network
-and publishes only Caddy's HTTP and HTTPS ports. PostgreSQL and Caddy state use
+`deploy/compose.prod.yml` connects PostgreSQL, the API, and the frontend, and
+publishes only Caddy's HTTP and HTTPS ports. PostgreSQL and Caddy state use
 named volumes. Copy `deploy/env.production.example` to the ignored
 `deploy/.env.production` and replace the placeholders. On a Linux server with
 Docker Compose, run `bash deploy/scripts/deploy.sh` from the repository root. It
-validates Compose configuration, builds the API, waits for PostgreSQL, runs
-`prisma migrate deploy`, recreates the API and Caddy, and checks health and
-database readiness. It does not remove named volumes.
+validates Compose configuration, builds both app images, waits for PostgreSQL,
+runs `prisma migrate deploy`, recreates the API, frontend, and Caddy, and checks health and
+database readiness. It does not remove named volumes. Caddy routes `/api/*` to
+the API and all other paths to the frontend.
 
 Run `bash deploy/scripts/backup-db.sh` to save a timestamped PostgreSQL custom
 dump under the ignored `backups/` directory. Set `BACKUP_DIR` to choose another
@@ -88,7 +119,7 @@ To restore, stop the application services, then name both the dump and target
 database explicitly:
 
 ```bash
-docker compose -p admitly -f deploy/compose.prod.yml --env-file deploy/.env.production stop api caddy
+docker compose -p admitly -f deploy/compose.prod.yml --env-file deploy/.env.production stop api web caddy
 bash deploy/scripts/restore-db.sh backups/admitly_YYYY-MM-DD_HH-MM-SS.dump --confirm-db=admitly
 bash deploy/scripts/deploy.sh
 ```

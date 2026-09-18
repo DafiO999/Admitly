@@ -15,6 +15,7 @@ export function recommendationRoutes(
       apiPaths.recommendationExplanation,
       async (request) => createRecommendationExplanation(
         request.body, request.params.universityId, providerFactory, aiProviderFactory,
+        request.headers['accept-language']?.toLowerCase().startsWith('ru') ? 'ru' : 'en',
       ),
     );
   };

@@ -17,7 +17,7 @@ printf 'Restore target database: %s\n' "$target_database"
 [[ $confirmation == "--confirm-db=$target_database" ]] \
   || die 'Explicit confirmation must match the target database name'
 
-for service in api caddy; do
+for service in api web caddy; do
   id=$(service_id "$service")
   if [[ -n $id && $(health_status "$id") != exited ]]; then
     die "Stop $service before restoring the database"

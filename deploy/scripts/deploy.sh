@@ -4,8 +4,8 @@ source "$(dirname -- "${BASH_SOURCE[0]}")/common.sh"
 
 validate_configuration
 
-printf 'Building backend image...\n'
-"${COMPOSE[@]}" build api
+printf 'Building backend and frontend images...\n'
+"${COMPOSE[@]}" build api web
 
 printf 'Starting PostgreSQL...\n'
 "${COMPOSE[@]}" up -d db
@@ -17,6 +17,10 @@ printf 'Applying production migrations...\n'
 printf 'Starting API...\n'
 "${COMPOSE[@]}" up -d --no-deps --force-recreate api
 wait_healthy api
+
+printf 'Starting frontend...\n'
+"${COMPOSE[@]}" up -d --no-deps --force-recreate web
+wait_healthy web
 
 printf 'Starting Caddy...\n'
 "${COMPOSE[@]}" up -d --no-deps --force-recreate caddy

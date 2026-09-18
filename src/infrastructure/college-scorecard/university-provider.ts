@@ -37,7 +37,7 @@ export class CollegeScorecardProvider implements UniversityProvider {
       throw new UniversityProviderError('CONFIGURATION');
     }
     this.apiKey = options.apiKey;
-    this.timeoutMs = options.timeoutMs ?? 10_000;
+    this.timeoutMs = options.timeoutMs ?? 20_000;
     this.fetcher = options.fetcher ?? fetch;
   }
 
@@ -48,6 +48,7 @@ export class CollegeScorecardProvider implements UniversityProvider {
     const url = this.createUrl(year);
     url.searchParams.set('per_page', String(limit));
     if (state) url.searchParams.set('school.state', state);
+    else url.searchParams.set('sort', 'latest.student.size:desc');
     const rows = await this.request(url);
     const universities = rows.flatMap((row) => {
       const university = mapScorecardUniversity(row, year);

@@ -30,6 +30,13 @@ const environmentSchema = z.object({
       message: 'DATABASE_URL is required in production',
     });
   }
+  if (!value.DEMO_DATA_MODE && !value.COLLEGE_SCORECARD_API_KEY) {
+    context.addIssue({
+      code: 'custom',
+      path: ['COLLEGE_SCORECARD_API_KEY'],
+      message: 'COLLEGE_SCORECARD_API_KEY is required when DEMO_DATA_MODE=false',
+    });
+  }
 });
 
 export type Environment = z.infer<typeof environmentSchema>;

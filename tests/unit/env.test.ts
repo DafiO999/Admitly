@@ -12,10 +12,11 @@ describe('environment configuration', () => {
   });
 
   it('validates typed settings', () => {
-    expect(loadEnvironment({ PORT: '3100', DEMO_DATA_MODE: 'false' })).toMatchObject({
+    expect(loadEnvironment({ PORT: '3100', DEMO_DATA_MODE: 'false', COLLEGE_SCORECARD_API_KEY: 'private-key' })).toMatchObject({
       PORT: 3100,
       DEMO_DATA_MODE: false,
     });
+    expect(() => loadEnvironment({ DEMO_DATA_MODE: 'false' })).toThrow('COLLEGE_SCORECARD_API_KEY');
     expect(() => loadEnvironment({ PORT: 'invalid' })).toThrow('PORT');
     expect(() => loadEnvironment({ DEMO_DATA_MODE: 'yes' })).toThrow('DEMO_DATA_MODE');
   });

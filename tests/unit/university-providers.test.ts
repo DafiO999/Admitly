@@ -53,19 +53,28 @@ describe('university providers', () => {
       studentSize: 8000, admissionRate: 0.3,
       programs: [{
         key: '1107', name: 'Computer Science.', field: 'computer_science', degree: 'bachelor',
-        sourceStatus: 'official', sourceUrl: 'https://api.data.gov/ed/collegescorecard/v1/schools?id=166027',
+        sourceStatus: 'official', sourceUrl: 'https://collegescorecard.ed.gov/school/?166027',
       }],
       dataYear: 2023, sourceStatus: 'official',
-      sourceUrl: 'https://api.data.gov/ed/collegescorecard/v1/schools?id=166027',
+      sourceUrl: 'https://collegescorecard.ed.gov/school/?166027',
     }]);
     const [url, init] = fetcher.mock.calls[0]!;
     expect(String(url)).toContain('school.state=MA');
+    expect(String(url)).not.toContain('sort=');
     expect(String(url)).toContain('2023.student.size');
     expect(String(url)).toContain('latest.programs.cip_4_digit');
     expect(String(url)).not.toContain('private-key');
     expect(init?.headers).toEqual({ 'X-Api-Key': 'private-key' });
     expect(JSON.stringify(universities)).not.toContain('private-key');
     expect(universities[0]).not.toHaveProperty('satMedian');
+  });
+
+  it('samples large universities across the US when no state is chosen', async () => {
+    const fetcher = vi.fn<typeof fetch>().mockResolvedValue(response([scorecardRow]));
+    const provider = new CollegeScorecardProvider({ apiKey: 'private-key', fetcher });
+    await provider.search({ field: 'computer_science', limit: 20 });
+    expect(new URL(String(fetcher.mock.calls[0]?.[0])).searchParams.get('sort'))
+      .toBe('latest.student.size:desc');
   });
 
   it('does not invent a single data year for latest fields', () => {

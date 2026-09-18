@@ -129,6 +129,22 @@ describe('optional AI explanations', () => {
     }
   });
 
+  it('returns Russian rule-based wording when requested by the frontend', async () => {
+    const app = buildApp({}, { universityProvider: new DemoUniversityProvider(), aiProvider: null });
+    try {
+      const response = await app.inject({
+        method: 'POST', url: '/api/recommendations/demo-redwood-state/explanation',
+        headers: { 'accept-language': 'ru-RU' }, payload: { profile },
+      });
+      expect(response.statusCode).toBe(200);
+      expect(response.json().explanation.summary).toContain('соответствие профилю');
+      expect(response.json().explanation.reasons).toHaveLength(4);
+      expect(response.body).not.toContain('Reported');
+    } finally {
+      await app.close();
+    }
+  });
+
   it('rejects invented costs, probabilities, and extra source claims', async () => {
     for (const explanation of [
       { summary: 'Your tuition is $1,000.', reasons: [], concerns: [] },

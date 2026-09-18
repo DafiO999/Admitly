@@ -1,4 +1,9 @@
 {$SITE_DOMAIN} {
     encode zstd gzip
-    reverse_proxy api:3001
+    handle /api/* {
+        reverse_proxy api:3001
+    }
+    handle {
+        reverse_proxy web:3000
+    }
 }

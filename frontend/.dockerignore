@@ -1,0 +1,10 @@
+node_modules
+.next
+next-env.d.ts
+out
+.env
+.env.*
+*.log
+*.tsbuildinfo
+AGENTS.md
+CLAUDE.md
