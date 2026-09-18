@@ -2,11 +2,12 @@ import type { StudentProfile } from '../profile/schema.js';
 import type { AdmissionRequirement } from '../university/requirement.js';
 import type { University } from '../university/schema.js';
 import { ROADMAP_RULES_VERSION } from '../versions.js';
-import { roadmapSchema, type Roadmap, type RoadmapItem, type RoadmapStatus, type SourceCoverage } from './schema.js';
+import { roadmapProgress, roadmapSchema, type Roadmap, type RoadmapItem, type RoadmapStatus, type SourceCoverage } from './schema.js';
 
 export interface RoadmapUniversity {
   university: University;
   requirements: AdmissionRequirement[];
+  admissionsContact?: { email: string; sourceUrl: string; sourceStatus: 'official' | 'verified' };
 }
 
 function relevantRequirement(
@@ -105,13 +106,22 @@ export function buildRoadmap(
     });
   }
 
-  for (const { university, requirements } of schools) {
+  for (const { university, requirements, admissionsContact } of schools) {
     const verifyId = `school:${university.id}:verify`;
     add({
       id: verifyId, title: `Check requirements for ${university.name}`, category: 'research',
       description: 'Confirm current application requirements directly with the university.',
       priority: 80, dependsOnIds: ['research:programs'], sourceStatus: 'unknown',
     });
+    if (admissionsContact) {
+      add({
+        id: `school:${university.id}:email`, title: `Prepare admissions email for ${university.name}`,
+        description: 'Draft and review your message before sending it to the verified admissions contact.',
+        category: 'university_email', priority: 65, dependsOnIds: [verifyId],
+        sourceStatus: admissionsContact.sourceStatus, sourceUrl: admissionsContact.sourceUrl,
+        letter: { universityId: university.id, recipientEmail: admissionsContact.email, body: '' },
+      });
+    }
     const relevant = requirements.filter((requirement) => relevantRequirement(requirement, university, profile))
       .filter((requirement) => requirement.kind !== 'application_deadline'
         || !requirement.date || dateForIntake(requirement, profile.targetIntakeYear) !== undefined)
@@ -162,5 +172,6 @@ export function buildRoadmap(
   }
   const nextActionId = selectNextAction(items);
   for (const item of items) item.isNextAction = item.id === nextActionId;
-  return { roadmap: roadmapSchema.parse({ rulesVersion: ROADMAP_RULES_VERSION, items, nextActionId }), sourceCoverage };
+  return { roadmap: roadmapSchema.parse({ rulesVersion: ROADMAP_RULES_VERSION, items, nextActionId,
+    progress: roadmapProgress(items) }), sourceCoverage };
 }

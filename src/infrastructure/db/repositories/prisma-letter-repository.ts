@@ -1,12 +1,13 @@
 import { Prisma, type AdmissionLetter, type PrismaClient } from '@prisma/client';
 import { z } from 'zod';
 import {
-  LetterNotEditableError, LetterNotFoundError, LetterVariantNotFoundError,
+  LetterDraftSupersededError, LetterNotEditableError, LetterNotFoundError, LetterVariantNotFoundError,
   type LetterGenerationRecord, type LetterRecord, type LetterRepository,
 } from '../../../application/ports/letter-repository.js';
 import { DatabaseUnavailableError } from '../../../application/ports/plan-repository.js';
 import { studentProfileSchema } from '../../../domain/profile/schema.js';
 import { programSummarySchema } from '../../../domain/university/schema.js';
+import { currentLetterContextHashes, selectedDraftIsCurrent } from './letter-context.js';
 
 const variantOrder = { concise: 0, balanced: 1, detailed: 2 } as const;
 
@@ -76,21 +77,28 @@ export class PrismaLetterRepository implements LetterRepository {
         if (!['created', 'drafts_generated', 'draft_selected'].includes(letter.status)) {
           throw new LetterNotEditableError();
         }
+        const current = await currentLetterContextHashes(tx, letter.profileId, letter.universityId);
+        if (!current || current.profileHash !== input.profileHash
+          || current.universityHash !== input.universityHash) throw new LetterDraftSupersededError();
+        const priorSelectionCurrent = letter.status === 'draft_selected'
+          ? await selectedDraftIsCurrent(tx, letter) : false;
         const generation = await tx.letterGeneration.create({
           data: {
             letterId: input.letterId,
             promptVersion: input.promptVersion,
             additionalContext: input.additionalContext ?? null,
             inputSnapshot: JSON.parse(JSON.stringify(input.inputSnapshot)) as Prisma.InputJsonValue,
+            profileHash: input.profileHash, universityHash: input.universityHash,
             variants: { create: input.drafts.variants.map((draft) => ({
               variant: draft.variant, subject: draft.subject, body: draft.body,
             })) },
           },
           include: { variants: true },
         });
-        if (letter.status !== 'draft_selected') {
+        if (letter.status !== 'draft_selected' || !priorSelectionCurrent) {
           await tx.admissionLetter.update({
-            where: { id: letter.id }, data: { status: 'drafts_generated' },
+            where: { id: letter.id }, data: { status: 'drafts_generated',
+              selectedVariantId: null, subject: null, body: null },
           });
         }
         return {
@@ -101,7 +109,8 @@ export class PrismaLetterRepository implements LetterRepository {
         };
       }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
     } catch (error) {
-      if (error instanceof LetterNotFoundError || error instanceof LetterNotEditableError) throw error;
+      if (error instanceof LetterNotFoundError || error instanceof LetterNotEditableError
+        || error instanceof LetterDraftSupersededError) throw error;
       throw new DatabaseUnavailableError();
     }
   }
@@ -114,9 +123,14 @@ export class PrismaLetterRepository implements LetterRepository {
         if (!['drafts_generated', 'draft_selected'].includes(letter.status)) throw new LetterNotEditableError();
         const variant = await tx.letterVariant.findFirst({
           where: { id: input.sourceVariantId, generation: { letterId: input.letterId } },
-          select: { id: true },
+          include: { generation: { select: { profileHash: true, universityHash: true } } },
         });
         if (!variant) throw new LetterVariantNotFoundError();
+        const current = await currentLetterContextHashes(tx, letter.profileId, letter.universityId);
+        if (!current || variant.generation.profileHash !== current.profileHash
+          || variant.generation.universityHash !== current.universityHash) {
+          throw new LetterDraftSupersededError();
+        }
         const updated = await tx.admissionLetter.update({
           where: { id: letter.id },
           data: {
@@ -128,7 +142,7 @@ export class PrismaLetterRepository implements LetterRepository {
       }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
     } catch (error) {
       if (error instanceof LetterNotFoundError || error instanceof LetterNotEditableError
-        || error instanceof LetterVariantNotFoundError) throw error;
+        || error instanceof LetterVariantNotFoundError || error instanceof LetterDraftSupersededError) throw error;
       throw new DatabaseUnavailableError();
     }
   }

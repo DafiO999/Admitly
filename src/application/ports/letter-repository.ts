@@ -38,6 +38,7 @@ export interface LetterRepository {
   findById(letterId: string): Promise<LetterRecord | null>;
   saveGeneration(input: {
     letterId: string; promptVersion: string; additionalContext?: string;
+    profileHash: string; universityHash: string;
     inputSnapshot: GenerateLetterDraftsInput; drafts: GeneratedLetterDrafts;
   }): Promise<LetterGenerationRecord>;
   saveFinalContent(input: {
@@ -55,4 +56,8 @@ export class LetterNotEditableError extends Error {
 
 export class LetterVariantNotFoundError extends Error {
   constructor() { super('Letter variant not found'); this.name = 'LetterVariantNotFoundError'; }
+}
+
+export class LetterDraftSupersededError extends Error {
+  constructor() { super('Letter draft context changed'); this.name = 'LetterDraftSupersededError'; }
 }

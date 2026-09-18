@@ -7,7 +7,8 @@ import { ComparisonUniversityNotFoundError } from '../../application/services/co
 import { RecommendationNotFoundError } from '../../application/services/recommendation-explanation.js';
 import { RoadmapProgramMismatchError, RoadmapUniversityNotFoundError } from '../../application/services/roadmap.js';
 import { UniversityEmailUnavailableError } from '../../application/services/admissions-contact.js';
-import { LetterNotEditableError, LetterNotFoundError, LetterVariantNotFoundError } from '../../application/ports/letter-repository.js';
+import { LetterDraftSupersededError, LetterNotEditableError, LetterNotFoundError,
+  LetterVariantNotFoundError } from '../../application/ports/letter-repository.js';
 import { AiDraftGenerationFailedError, InvalidReplyToError } from '../../application/services/letters.js';
 import {
   AttachmentNotFoundError, AttachmentTooLargeError, InvalidFileError,
@@ -86,7 +87,7 @@ export function registerErrorHandlers(app: FastifyInstance): void {
       return send(400, 'INVALID_FILE', 'Invalid attachment');
     }
 
-    if (error instanceof LetterNotEditableError) {
+    if (error instanceof LetterNotEditableError || error instanceof LetterDraftSupersededError) {
       return send(409, 'LETTER_NOT_EDITABLE', 'Letter is not editable');
     }
 

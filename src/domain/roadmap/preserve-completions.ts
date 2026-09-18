@@ -1,12 +1,13 @@
 import type { StudentProfile } from '../profile/schema.js';
 import { selectNextAction } from './builder.js';
-import { roadmapSchema, type Roadmap, type RoadmapItem } from './schema.js';
+import { roadmapProgress, roadmapSchema, type Roadmap, type RoadmapItem } from './schema.js';
 
 function sameTask(left: RoadmapItem, right: RoadmapItem): boolean {
   const stable = (item: RoadmapItem) => ({
     id: item.id, title: item.title, description: item.description,
     category: item.category, priority: item.priority, dueDate: item.dueDate,
     dependsOnIds: item.dependsOnIds, sourceUrl: item.sourceUrl, sourceStatus: item.sourceStatus,
+    letterUniversityId: item.letter?.universityId, letterRecipientEmail: item.letter?.recipientEmail,
   });
   return JSON.stringify(stable(left)) === JSON.stringify(stable(right));
 }
@@ -47,7 +48,8 @@ export function preserveCompletedTasks(
   while (changed) {
     changed = false;
     for (const item of next.items) {
-      if (candidates.has(item.id) && item.dependsOnIds.some((id) => !candidates.has(id))) {
+      if (item.category !== 'university_email' && candidates.has(item.id)
+        && item.dependsOnIds.some((id) => !candidates.has(id))) {
         candidates.delete(item.id);
         changed = true;
       }
@@ -60,5 +62,6 @@ export function preserveCompletedTasks(
   return roadmapSchema.parse({
     rulesVersion: next.rulesVersion, nextActionId,
     items: items.map((item) => ({ ...item, isNextAction: item.id === nextActionId })),
+    progress: roadmapProgress(items),
   });
 }

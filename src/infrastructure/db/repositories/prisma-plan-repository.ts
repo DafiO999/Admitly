@@ -11,8 +11,9 @@ import { studentProfileSchema } from '../../../domain/profile/schema.js';
 import { recommendedUniversitySchema } from '../../../domain/recommendation/schema.js';
 import { selectNextAction } from '../../../domain/roadmap/builder.js';
 import {
-  roadmapItemSchema, roadmapSchema, sourceCoverageSchema, type RoadmapItem, type RoadmapStatus,
+  roadmapItemSchema, roadmapProgress, roadmapSchema, sourceCoverageSchema, type RoadmapItem, type RoadmapStatus,
 } from '../../../domain/roadmap/schema.js';
+import { projectRoadmapLetters } from './roadmap-letter-projection.js';
 
 const runSnapshotSchema = z.object({
   engineVersion: z.string().min(1),
@@ -30,7 +31,7 @@ function toDate(value: string | undefined): Date | null {
   return value ? new Date(`${value}T00:00:00.000Z`) : null;
 }
 
-function fromStoredItem(item: StoredRoadmapItem): RoadmapItem {
+export function fromStoredItem(item: StoredRoadmapItem): RoadmapItem {
   return roadmapItemSchema.parse({
     id: item.key, title: item.title, category: item.category,
     priority: item.priority, status: item.status, isNextAction: item.isNextAction,
@@ -53,7 +54,8 @@ function fromStoredRoadmap(row: {
   return {
     id: row.id,
     selectedUniversityIds: z.array(z.string().min(1)).parse(row.selectedUniversityIds),
-    ...roadmapSchema.parse({ rulesVersion: row.rulesVersion, items, nextActionId }),
+    ...roadmapSchema.parse({ rulesVersion: row.rulesVersion, items, nextActionId,
+      progress: roadmapProgress(items) }),
   };
 }
 
@@ -78,6 +80,9 @@ export class PrismaPlanRepository implements PlanRepository {
     };
     try {
       const saved = await this.client.$transaction(async (transaction) => {
+        const previousProfile = await transaction.profile.findUnique({
+          where: { id: profileId }, select: { profileHash: true },
+        });
         if (input.expectedCurrentRoadmapId) {
           const current = await transaction.profile.findUnique({
             where: { id: profileId }, select: { currentRoadmapId: true },
@@ -97,6 +102,14 @@ export class PrismaPlanRepository implements PlanRepository {
           create: { id: profileId, ...profileData },
           update: profileData,
         });
+        if (previousProfile && previousProfile.profileHash !== profileHash) {
+          await transaction.admissionLetter.updateMany({
+            where: { profileId, status: { in: [
+              'created', 'drafts_generated', 'draft_selected', 'ready_to_send', 'failed',
+            ] } },
+            data: { status: 'superseded' },
+          });
+        }
         const run = await transaction.recommendationRun.create({
           data: {
             profileId, profileHash, engineVersion: input.engineVersion,
@@ -121,12 +134,13 @@ export class PrismaPlanRepository implements PlanRepository {
         await transaction.profile.update({
           where: { id: profileId }, data: { currentRoadmapId: savedRoadmap.id },
         });
-        return { runId: run.id, roadmapId: savedRoadmap.id };
+        return { runId: run.id, roadmapId: savedRoadmap.id,
+          projectedRoadmap: await projectRoadmapLetters(transaction, profileId, roadmap) };
       }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
       return {
         profile: storedProfile, profileHash,
         recommendationRun: { id: saved.runId, engineVersion: input.engineVersion, recommendations, promptVersions },
-        roadmap: { ...roadmap, id: saved.roadmapId, selectedUniversityIds }, sourceCoverage,
+        roadmap: { ...saved.projectedRoadmap, id: saved.roadmapId, selectedUniversityIds }, sourceCoverage,
       };
     } catch (error) {
       if (error instanceof PlanConflictError || (error instanceof Prisma.PrismaClientKnownRequestError
@@ -161,7 +175,8 @@ export class PrismaPlanRepository implements PlanRepository {
           id: run.id, engineVersion: snapshot.engineVersion, recommendations: snapshot.recommendations,
           ...(snapshot.promptVersions ? { promptVersions: snapshot.promptVersions } : {}),
         },
-        roadmap: fromStoredRoadmap(roadmap),
+        roadmap: { ...await projectRoadmapLetters(this.client, row.id, fromStoredRoadmap(roadmap)),
+          id: roadmap.id, selectedUniversityIds: z.array(z.string().min(1)).parse(roadmap.selectedUniversityIds) },
         sourceCoverage: sourceCoverageSchema.parse(roadmap.sourceCoverage),
       };
     } catch {
@@ -182,6 +197,7 @@ export class PrismaPlanRepository implements PlanRepository {
         if (profile?.currentRoadmapId !== roadmapId) return null;
         const target = row.items.find((item) => item.key === itemKey);
         if (!target) return null;
+        if (target.category === 'university_email') throw new PlanConflictError();
         await transaction.roadmapItem.update({ where: { id: target.id }, data: { status } });
         const items = row.items.map((item) => fromStoredItem({
           ...item, status: item.id === target.id ? status : item.status,
@@ -195,16 +211,19 @@ export class PrismaPlanRepository implements PlanRepository {
             data: { isNextAction: true },
           });
         }
+        const updatedRoadmap = roadmapSchema.parse({
+          rulesVersion: row.rulesVersion, nextActionId,
+          items: items.map((item) => ({ ...item, isNextAction: item.id === nextActionId })),
+          progress: roadmapProgress(items),
+        });
         return {
           id: row.id,
           selectedUniversityIds: z.array(z.string().min(1)).parse(row.selectedUniversityIds),
-          ...roadmapSchema.parse({
-            rulesVersion: row.rulesVersion, nextActionId,
-            items: items.map((item) => ({ ...item, isNextAction: item.id === nextActionId })),
-          }),
+          ...await projectRoadmapLetters(transaction, row.profileId, updatedRoadmap),
         };
       }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
-    } catch {
+    } catch (error) {
+      if (error instanceof PlanConflictError) throw error;
       throw new DatabaseUnavailableError();
     }
   }

@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import type { AdmissionRequirementProvider } from '../ports/admission-requirement-provider.js';
 import type { AiProvider } from '../ports/ai-provider.js';
+import type { UniversityContactRepository } from '../ports/university-contact-repository.js';
 import { UniversityProviderError, type UniversityProvider } from '../ports/university-provider.js';
 import { isGroundedRoadmapRewrite } from './ai-guard.js';
 import { studentProfileSchema } from '../../domain/profile/schema.js';
@@ -8,6 +9,7 @@ import { buildRoadmap } from '../../domain/roadmap/builder.js';
 import { roadmapSchema } from '../../domain/roadmap/schema.js';
 import { admissionRequirementSchema } from '../../domain/university/requirement.js';
 import { universitySchema } from '../../domain/university/schema.js';
+import { selectSendableContact } from '../../domain/university/contact.js';
 import { ROADMAP_PROMPT_VERSION } from '../../domain/versions.js';
 
 export const roadmapRequestSchema = z.object({
@@ -47,6 +49,7 @@ export async function createRoadmap(
   input: unknown,
   providerFactory: () => RoadmapProviders,
   aiProviderFactory: () => AiProvider | null,
+  contactRepositoryFactory: () => UniversityContactRepository | null = () => null,
 ) {
   const { profile, selectedUniversityIds, enhanceWithAi } = roadmapRequestSchema.parse(input);
   const { universityProvider, requirementProvider } = providerFactory();
@@ -68,7 +71,15 @@ export async function createRoadmap(
     || new Set(requirements.data.map((requirement) => requirement.id)).size !== requirements.data.length) {
     throw new UniversityProviderError('INVALID_RESPONSE');
   }
-  const schools = universities.data.map((university) => ({ university, requirements: requirements.data }));
+  const contactRepository = contactRepositoryFactory();
+  const contacts = contactRepository
+    ? await Promise.all(selectedUniversityIds.map((id) => contactRepository.findByUniversityId(id))) : [];
+  const schools = universities.data.map((university, index) => {
+    const contact = selectSendableContact(university.id, contacts[index] ?? []);
+    return { university, requirements: requirements.data,
+      ...(contact ? { admissionsContact: { email: contact.email, sourceUrl: contact.sourceUrl,
+        sourceStatus: contact.sourceStatus } } : {}) };
+  });
   const { roadmap, sourceCoverage } = buildRoadmap(profile, schools);
   const fallback = { roadmap, sourceCoverage, mode: 'rules' as const };
   if (!enhanceWithAi) return fallback;

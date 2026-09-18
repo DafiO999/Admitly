@@ -9,11 +9,13 @@ import type { MailProvider } from '../../src/application/ports/mail-provider.js'
 import { letterDraftSentenceBank } from '../../src/domain/letter/draft-guard.js';
 import { generatedLetterDraftsSchema, type GenerateLetterDraftsInput } from '../../src/domain/letter/schema.js';
 import { normalizeGpa } from '../../src/domain/profile/normalize.js';
+import { buildRoadmap } from '../../src/domain/roadmap/builder.js';
 import { createPrismaClient } from '../../src/infrastructure/db/prisma/client.js';
 import { PrismaLetterRepository } from '../../src/infrastructure/db/repositories/prisma-letter-repository.js';
 import { PrismaLetterAttachmentRepository } from '../../src/infrastructure/db/repositories/prisma-letter-attachment-repository.js';
 import { PrismaLetterDeliveryRepository } from '../../src/infrastructure/db/repositories/prisma-letter-delivery-repository.js';
 import { PrismaUniversityContactRepository } from '../../src/infrastructure/db/repositories/prisma-university-contact-repository.js';
+import { PrismaPlanRepository } from '../../src/infrastructure/db/repositories/prisma-plan-repository.js';
 import { canonicalDemoProfile, demoUniversities } from '../../src/infrastructure/demo/fixtures.js';
 import { LocalFileStorage } from '../../src/infrastructure/storage/local-file-storage.js';
 import { getTestDatabaseUrl } from './test-database-url.js';
@@ -63,11 +65,14 @@ describe('admission letter persistence and routes', () => {
     const letters = new PrismaLetterRepository(client);
     const attachments = new PrismaLetterAttachmentRepository(client);
     const delivery = new PrismaLetterDeliveryRepository(client);
+    const plans = new PrismaPlanRepository(client);
     const uploadDir = await mkdtemp(join(tmpdir(), 'admitly-integration-files-'));
     const storage = new LocalFileStorage(uploadDir);
     const profileId = randomUUID();
     const contactId = randomUUID();
     const universityId = `letter-test-${randomUUID()}`;
+    const otherContactId = randomUUID();
+    const otherUniversityId = `letter-test-${randomUUID()}`;
     const profile = { ...canonicalDemoProfile, id: profileId };
     let invalidDraft = false;
     const provider: LetterDraftProvider = {
@@ -100,6 +105,7 @@ describe('admission letter persistence and routes', () => {
     } };
     const app = buildApp({}, {
       contactRepository: contacts, letterRepository: letters, letterDraftProvider: provider,
+      planRepository: plans,
       attachmentRepository: attachments, deliveryRepository: delivery, fileStorage: storage,
       mailProvider,
       attachmentLimits: { maxFileBytes: 50, maxTotalBytes: 40 },
@@ -108,6 +114,10 @@ describe('admission letter persistence and routes', () => {
       await client.university.create({ data: {
         id: universityId, provider: 'demo', name: 'Test University',
         programs: demoUniversities[0]!.programs, sourceStatus: 'demo',
+      } });
+      await client.university.create({ data: {
+        id: otherUniversityId, provider: 'demo', name: 'Other University',
+        programs: demoUniversities[1]!.programs, sourceStatus: 'demo',
       } });
       await client.profile.create({ data: {
         id: profileId, payload: profile, profileHash: 'letter-test',
@@ -131,6 +141,28 @@ describe('admission letter persistence and routes', () => {
         id: contactId, universityId, kind: 'international_admissions',
         email: 'admissions@example.edu', sourceUrl: 'https://example.edu/admissions',
         sourceStatus: 'official', verifiedAt: '2026-09-18T00:00:00.000Z', active: true,
+      });
+      await contacts.upsert({
+        id: otherContactId, universityId: otherUniversityId, kind: 'international_admissions',
+        email: 'other@example.edu', sourceUrl: 'https://other.example.edu/admissions',
+        sourceStatus: 'official', verifiedAt: '2026-09-18T00:00:00.000Z', active: true,
+      });
+      const university = { ...demoUniversities[0]!, id: universityId, name: 'Test University' };
+      const otherUniversity = { ...demoUniversities[1]!, id: otherUniversityId, name: 'Other University' };
+      const generatedPlan = buildRoadmap(profile, [{ university, requirements: [],
+        admissionsContact: { email: 'admissions@example.edu', sourceUrl: 'https://example.edu/admissions',
+          sourceStatus: 'official' } }, { university: otherUniversity, requirements: [],
+        admissionsContact: { email: 'other@example.edu', sourceUrl: 'https://other.example.edu/admissions',
+          sourceStatus: 'official' } }]);
+      const savedPlan = await plans.saveGenerated({
+        profile, engineVersion: 'letter-test', recommendations: [],
+        selectedUniversityIds: [universityId, otherUniversityId], ...generatedPlan,
+        promptVersions: { diagnosis: 'test', recommendationExplanation: 'test', roadmap: 'test' },
+      });
+      const emailKey = `school:${universityId}:email`;
+      const planUrl = `/api/plan/${profileId}`;
+      expect(savedPlan.roadmap.items.find((item) => item.id === emailKey)?.letter).toEqual({
+        universityId, recipientEmail: 'admissions@example.edu', body: '',
       });
       const override = await app.inject({ method: 'POST', url: createUrl,
         payload: { ...createBody, recipientEmail: 'attacker@example.com' } });
@@ -223,6 +255,18 @@ describe('admission letter persistence and routes', () => {
         status: 'draft_selected', selectedVariantId: firstVariantId,
         subject: 'My edited subject', body: 'My edited final text',
       });
+      const draftPlan = await app.inject({ method: 'GET', url: planUrl });
+      expect(draftPlan.statusCode, draftPlan.body).toBe(200);
+      expect(draftPlan.json().roadmap.items.find((item: { id: string }) => item.id === emailKey).letter)
+        .toEqual({ universityId, recipientEmail: 'admissions@example.edu', body: 'My edited final text' });
+      expect(draftPlan.json().roadmap.items.find((item: { id: string }) =>
+        item.id === `school:${otherUniversityId}:email`).letter).toEqual({
+        universityId: otherUniversityId, recipientEmail: 'other@example.edu', body: '',
+      });
+      expect(draftPlan.body).not.toContain('selectedVariantId');
+      expect(draftPlan.body).not.toContain('inputSnapshot');
+      expect(draftPlan.body).not.toContain('providerMessageId');
+      expect(draftPlan.body).not.toContain('attachments');
       expect(await client.letterVariant.findUniqueOrThrow({ where: { id: firstVariantId } }))
         .toEqual(originalVariant);
 
@@ -298,6 +342,19 @@ describe('admission letter persistence and routes', () => {
       expect(sentMessages[0]).toEqual({ to: 'admissions@example.edu', replyTo: 'alex@example.com',
         subject: 'My edited subject', body: 'My edited final text',
         attachments: [{ filename: 'award.pdf', bytes: pdf }] });
+      const sentPlan = await app.inject({ method: 'GET', url: planUrl });
+      expect(sentPlan.statusCode, sentPlan.body).toBe(200);
+      expect(sentPlan.json().roadmap.items.find((item: { id: string }) => item.id === emailKey))
+        .toMatchObject({ status: 'done', letter: { universityId,
+          recipientEmail: 'admissions@example.edu', body: 'My edited final text' } });
+      expect(sentPlan.json().roadmap.items.find((item: { id: string }) =>
+        item.id === `school:${otherUniversityId}:email`).status).toBe('pending');
+      expect(sentPlan.json().roadmap.progress.done).toBe(savedPlan.roadmap.progress.done + 1);
+      expect(sentPlan.json().roadmap.nextActionId).toBe(savedPlan.roadmap.nextActionId);
+      const manualReset = await app.inject({ method: 'PATCH',
+        url: `/api/roadmaps/${savedPlan.roadmap.id}/items/${encodeURIComponent(emailKey)}`,
+        payload: { status: 'pending' } });
+      expect(manualReset.statusCode).toBe(409);
       const replay = await app.inject({ method: 'POST', url: `/api/letters/${letterId}/send`,
         headers: { 'idempotency-key': 'first-send' } });
       expect(replay.statusCode).toBe(200);
@@ -361,13 +418,62 @@ describe('admission letter persistence and routes', () => {
         headers: { 'idempotency-key': 'ambiguous-key' } });
       expect(failedReplay.statusCode).toBe(502);
       expect(sendCount).toBe(3);
+
+      const makeSelectedDraft = async (body: string) => {
+        const createdLetter = await app.inject({ method: 'POST', url: createUrl, payload: createBody });
+        expect(createdLetter.statusCode, createdLetter.body).toBe(200);
+        const id = createdLetter.json().letter.id as string;
+        const drafts = await app.inject({ method: 'POST', url: `/api/letters/${id}/drafts`, payload: {} });
+        expect(drafts.statusCode, drafts.body).toBe(200);
+        const variantId = drafts.json().variants[0].id as string;
+        const selected = await app.inject({ method: 'PUT', url: `/api/letters/${id}/content`,
+          payload: { sourceVariantId: variantId, subject: 'Current inquiry', body } });
+        expect(selected.statusCode, selected.body).toBe(200);
+        return { id, variantId };
+      };
+      const pendingPlan = await plans.saveGenerated({
+        profile, engineVersion: 'letter-test', recommendations: [],
+        selectedUniversityIds: [universityId], ...generatedPlan,
+        promptVersions: { diagnosis: 'test', recommendationExplanation: 'test', roadmap: 'test' },
+      });
+      expect(pendingPlan.roadmap.items.find((item) => item.id === emailKey)?.status).toBe('pending');
+      const staleUniversityDraft = await makeSelectedDraft('University-bound draft');
+      expect((await app.inject({ method: 'GET', url: planUrl })).json().roadmap.items
+        .find((item: { id: string }) => item.id === emailKey).letter.body).toBe('University-bound draft');
+      await client.university.update({ where: { id: universityId }, data: { name: 'Renamed University' } });
+      expect((await app.inject({ method: 'GET', url: planUrl })).json().roadmap.items
+        .find((item: { id: string }) => item.id === emailKey).letter.body).toBe('');
+      const staleSelection = await app.inject({ method: 'PUT',
+        url: `/api/letters/${staleUniversityDraft.id}/content`, payload: {
+          sourceVariantId: staleUniversityDraft.variantId, subject: 'Old wording', body: 'Old wording',
+        } });
+      expect(staleSelection.statusCode).toBe(409);
+      expect((await app.inject({ method: 'POST',
+        url: `/api/letters/${staleUniversityDraft.id}/prepare` })).statusCode).toBe(409);
+      expect((await letters.findById(staleUniversityDraft.id))?.status).toBe('superseded');
+      await client.university.update({ where: { id: universityId }, data: { name: 'Test University' } });
+      const staleProfileDraft = await makeSelectedDraft('Profile-bound draft');
+      const changedProfile = { ...profile, annualBudgetUsd: profile.annualBudgetUsd + 1000 };
+      const changedPlan = buildRoadmap(changedProfile, [{ university, requirements: [],
+        admissionsContact: { email: 'admissions@example.edu', sourceUrl: 'https://example.edu/admissions',
+          sourceStatus: 'official' } }]);
+      await plans.saveGenerated({
+        profile: changedProfile, engineVersion: 'letter-test', recommendations: [],
+        selectedUniversityIds: [universityId], ...changedPlan,
+        promptVersions: { diagnosis: 'test', recommendationExplanation: 'test', roadmap: 'test' },
+      });
+      expect((await letters.findById(staleProfileDraft.id))?.status).toBe('superseded');
+      expect((await app.inject({ method: 'GET', url: planUrl })).json().roadmap.items
+        .find((item: { id: string }) => item.id === emailKey).letter.body).toBe('');
     } finally {
       await app.close();
       await client.profile.deleteMany({ where: { id: profileId } });
       await client.universityContact.deleteMany({ where: { id: contactId } });
+      await client.universityContact.deleteMany({ where: { id: otherContactId } });
       await client.university.deleteMany({ where: { id: universityId } });
+      await client.university.deleteMany({ where: { id: otherUniversityId } });
       await client.$disconnect();
       await rm(uploadDir, { recursive: true, force: true });
     }
-  }, 25_000);
+  }, 40_000);
 });

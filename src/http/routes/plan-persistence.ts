@@ -1,5 +1,6 @@
 import type { FastifyPluginAsync } from 'fastify';
 import type { PlanRepository } from '../../application/ports/plan-repository.js';
+import type { UniversityContactRepository } from '../../application/ports/university-contact-repository.js';
 import {
   getCurrentPlan, recalculatePlan, saveProfileAndPlan, updatePersistedRoadmapItem,
 } from '../../application/services/plan-persistence.js';
@@ -9,11 +10,13 @@ import { apiPaths } from './paths.js';
 export function planPersistenceRoutes(
   providerFactory: () => RoadmapProviders,
   repositoryFactory: () => PlanRepository,
+  contacts: () => UniversityContactRepository | null,
 ): FastifyPluginAsync {
   return async (app) => {
-    app.put(apiPaths.profile, async (request) => saveProfileAndPlan(request.body, providerFactory, repositoryFactory));
+    app.put(apiPaths.profile, async (request) => saveProfileAndPlan(request.body, providerFactory, repositoryFactory,
+      contacts));
     app.post(apiPaths.recalculate, async (request) =>
-      recalculatePlan(request.body, providerFactory, repositoryFactory));
+      recalculatePlan(request.body, providerFactory, repositoryFactory, contacts));
     app.get<{ Params: { profileId: string } }>(apiPaths.plan, async (request) =>
       getCurrentPlan(request.params.profileId, repositoryFactory));
     app.patch<{ Params: { roadmapId: string; itemId: string } }>(

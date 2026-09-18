@@ -61,6 +61,7 @@ enum AdmissionLetterStatus {
   sending
   sent
   failed
+  superseded
 }
 
 enum LetterVariantKind {
@@ -83,6 +84,7 @@ enum RoadmapCategory {
   academic
   activity
   research
+  university_email
 }
 
 enum RoadmapStatus {
@@ -193,6 +195,8 @@ model LetterGeneration {
   promptVersion     String
   additionalContext String?
   inputSnapshot     Json
+  profileHash       String?
+  universityHash    String?
   createdAt         DateTime        @default(now())
   variants          LetterVariant[]
 

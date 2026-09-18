@@ -18,3 +18,15 @@ export function isSendableContact(value: unknown): value is UniversityContact {
   const parsed = universityContactSchema.safeParse(value);
   return parsed.success && parsed.data.active;
 }
+
+const contactPriority: Record<UniversityContact['kind'], number> = {
+  international_admissions: 0,
+  undergraduate_admissions: 1,
+  general_admissions: 2,
+};
+
+export function selectSendableContact(universityId: string, values: unknown[]): UniversityContact | null {
+  return values.filter(isSendableContact).filter((contact) => contact.universityId === universityId)
+    .sort((a, b) => contactPriority[a.kind] - contactPriority[b.kind]
+      || b.verifiedAt.localeCompare(a.verifiedAt) || a.id.localeCompare(b.id))[0] ?? null;
+}

@@ -8,6 +8,9 @@ import { DatabaseUnavailableError } from '../../../application/ports/plan-reposi
 import { letterContentRequestSchema, letterSenderSchema } from '../../../domain/letter/schema.js';
 import { toAttachmentMetadata, toStoredAttachment } from './prisma-letter-attachment-repository.js';
 import { toLetterRecord } from './prisma-letter-repository.js';
+import { selectedDraftIsCurrent } from './letter-context.js';
+import { selectNextAction } from '../../../domain/roadmap/builder.js';
+import { fromStoredItem } from './prisma-plan-repository.js';
 
 const variantOrder = { concise: 0, balanced: 1, detailed: 2 } as const;
 
@@ -104,10 +107,14 @@ export class PrismaLetterDeliveryRepository implements LetterDeliveryRepository 
 
   async prepare(input: Parameters<LetterDeliveryRepository['prepare']>[0]) {
     try {
-      return await this.client.$transaction(async (tx) => {
+      const result = await this.client.$transaction(async (tx) => {
         const letter = await lockLetter(tx, input.letterId);
         if (letter.status !== 'draft_selected' && letter.status !== 'ready_to_send') {
           throw new LetterNotReadyError();
+        }
+        if (!await selectedDraftIsCurrent(tx, letter)) {
+          await tx.admissionLetter.update({ where: { id: letter.id }, data: { status: 'superseded' } });
+          return null;
         }
         assertContent(letter);
         await assertContact(tx, letter, input.contactId, input.recipientEmail);
@@ -117,6 +124,8 @@ export class PrismaLetterDeliveryRepository implements LetterDeliveryRepository 
           data: { status: 'ready_to_send', universityContactId: input.contactId } });
         return toLetterRecord(updated);
       }, { isolationLevel: Prisma.TransactionIsolationLevel.ReadCommitted });
+      if (!result) throw new LetterNotReadyError();
+      return result;
     } catch (error) {
       rethrowKnown(error);
     }
@@ -135,7 +144,7 @@ export class PrismaLetterDeliveryRepository implements LetterDeliveryRepository 
 
   async claim(input: Parameters<LetterDeliveryRepository['claim']>[0]) {
     try {
-      return await this.client.$transaction(async (tx) => {
+      const result = await this.client.$transaction(async (tx) => {
         const letter = await lockLetter(tx, input.letterId);
         const previous = await tx.letterSendAttempt.findUnique({
           where: { letterId_idempotencyKey: { letterId: input.letterId, idempotencyKey: input.key } },
@@ -144,6 +153,10 @@ export class PrismaLetterDeliveryRepository implements LetterDeliveryRepository 
         if (letter.status === 'sent') throw new LetterAlreadySentError();
         if (letter.status === 'sending') throw new LetterSendInProgressError();
         if (letter.status !== 'ready_to_send') throw new LetterNotReadyError();
+        if (!await selectedDraftIsCurrent(tx, letter)) {
+          await tx.admissionLetter.update({ where: { id: letter.id }, data: { status: 'superseded' } });
+          return null;
+        }
         assertContent(letter);
         await assertContact(tx, letter, input.contactId, input.recipientEmail);
         const attachments = await tx.letterAttachment.findMany({
@@ -161,6 +174,8 @@ export class PrismaLetterDeliveryRepository implements LetterDeliveryRepository 
           attachments: attachments.map(toStoredAttachment),
         };
       }, { isolationLevel: Prisma.TransactionIsolationLevel.ReadCommitted });
+      if (!result) throw new LetterNotReadyError();
+      return result;
     } catch (error) {
       rethrowKnown(error);
     }
@@ -169,6 +184,11 @@ export class PrismaLetterDeliveryRepository implements LetterDeliveryRepository 
   async finish(input: Parameters<LetterDeliveryRepository['finish']>[0]) {
     try {
       return await this.client.$transaction(async (tx) => {
+        const owner = await tx.admissionLetter.findUnique({
+          where: { id: input.letterId }, select: { profileId: true },
+        });
+        if (!owner) throw new LetterNotFoundError();
+        await tx.$queryRaw`SELECT "id" FROM "Profile" WHERE "id" = ${owner.profileId}::uuid FOR UPDATE`;
         const letter = await lockLetter(tx, input.letterId);
         const attempt = await tx.letterSendAttempt.findUnique({ where: { id: input.attemptId } });
         if (!attempt || attempt.letterId !== input.letterId) throw new LetterNotFoundError();
@@ -181,6 +201,31 @@ export class PrismaLetterDeliveryRepository implements LetterDeliveryRepository 
           status: input.status === 'accepted' ? 'sent' : 'failed',
           ...(input.status === 'accepted' ? { sentAt: new Date() } : {}),
         } });
+        if (input.status === 'accepted' && await selectedDraftIsCurrent(tx, letter)) {
+          const profile = await tx.profile.findUnique({
+            where: { id: letter.profileId }, select: { currentRoadmapId: true },
+          });
+          if (profile?.currentRoadmapId) {
+            const roadmap = await tx.roadmap.findUnique({
+              where: { id: profile.currentRoadmapId },
+              include: { items: { orderBy: { position: 'asc' } } },
+            });
+            const target = roadmap?.items.find((item) =>
+              item.key === `school:${letter.universityId}:email` && item.category === 'university_email');
+            if (roadmap && target) {
+              await tx.roadmapItem.update({ where: { id: target.id }, data: { status: 'done' } });
+              const items = roadmap.items.map((item) => fromStoredItem({
+                ...item, status: item.id === target.id ? 'done' : item.status, isNextAction: false,
+              }));
+              const nextActionId = selectNextAction(items);
+              await tx.roadmapItem.updateMany({ where: { roadmapId: roadmap.id }, data: { isNextAction: false } });
+              if (nextActionId) {
+                await tx.roadmapItem.update({ where: { roadmapId_key: { roadmapId: roadmap.id,
+                  key: nextActionId } }, data: { isNextAction: true } });
+              }
+            }
+          }
+        }
         return { letter: toLetterRecord(updated), attempt: toAttempt(completed) };
       }, { isolationLevel: Prisma.TransactionIsolationLevel.ReadCommitted });
     } catch (error) {

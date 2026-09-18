@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import type { GeneratedPlan, PlanRepository } from '../ports/plan-repository.js';
+import type { UniversityContactRepository } from '../ports/university-contact-repository.js';
 import { UniversityProviderError } from '../ports/university-provider.js';
 import { createRecommendations } from './recommendations.js';
 import type { RoadmapProviders } from './roadmap.js';
@@ -8,6 +9,7 @@ import { buildRoadmap } from '../../domain/roadmap/builder.js';
 import { preserveCompletedTasks } from '../../domain/roadmap/preserve-completions.js';
 import { roadmapStatusSchema } from '../../domain/roadmap/schema.js';
 import { admissionRequirementSchema } from '../../domain/university/requirement.js';
+import { selectSendableContact } from '../../domain/university/contact.js';
 import {
   DIAGNOSIS_PROMPT_VERSION, RECOMMENDATION_EXPLANATION_PROMPT_VERSION, ROADMAP_PROMPT_VERSION,
 } from '../../domain/versions.js';
@@ -27,6 +29,7 @@ export class PersistedPlanNotFoundError extends Error {
 async function generatePlan(
   profile: z.infer<typeof studentProfileSchema>,
   providerFactory: () => RoadmapProviders,
+  contacts: () => UniversityContactRepository | null,
 ): Promise<GeneratedPlan> {
   const providers = providerFactory();
   const recommendations = await createRecommendations({ profile }, () => providers.universityProvider);
@@ -42,10 +45,15 @@ async function generatePlan(
     || new Set(requirements.data.map((requirement) => requirement.id)).size !== requirements.data.length) {
     throw new UniversityProviderError('INVALID_RESPONSE');
   }
-  const generated = buildRoadmap(profile, selected.map((recommendation) => ({
-    university: recommendation.university,
-    requirements: requirements.data,
-  })));
+  const contactRepository = contacts();
+  const contactLists = contactRepository
+    ? await Promise.all(selectedUniversityIds.map((id) => contactRepository.findByUniversityId(id))) : [];
+  const generated = buildRoadmap(profile, selected.map((recommendation, index) => {
+    const contact = selectSendableContact(recommendation.universityId, contactLists[index] ?? []);
+    return { university: recommendation.university, requirements: requirements.data,
+      ...(contact ? { admissionsContact: { email: contact.email, sourceUrl: contact.sourceUrl,
+        sourceStatus: contact.sourceStatus } } : {}) };
+  }));
   return {
     profile, engineVersion: recommendations.engineVersion,
     recommendations: recommendations.recommendations,
@@ -62,9 +70,10 @@ export async function saveProfileAndPlan(
   input: unknown,
   providerFactory: () => RoadmapProviders,
   repositoryFactory: () => PlanRepository,
+  contactRepositoryFactory: () => UniversityContactRepository | null = () => null,
 ) {
   const { profile } = saveProfileRequestSchema.parse(input);
-  const plan = await generatePlan(profile, providerFactory);
+  const plan = await generatePlan(profile, providerFactory, contactRepositoryFactory);
   return repositoryFactory().saveGenerated(plan);
 }
 
@@ -72,12 +81,13 @@ export async function recalculatePlan(
   input: unknown,
   providerFactory: () => RoadmapProviders,
   repositoryFactory: () => PlanRepository,
+  contactRepositoryFactory: () => UniversityContactRepository | null = () => null,
 ) {
   const { profile } = recalculateRequestSchema.parse(input);
   const repository = repositoryFactory();
   const current = await repository.findCurrent(profile.id);
   if (!current) throw new PersistedPlanNotFoundError();
-  const generated = await generatePlan(profile, providerFactory);
+  const generated = await generatePlan(profile, providerFactory, contactRepositoryFactory);
   generated.roadmap = preserveCompletedTasks(
     current.roadmap, generated.roadmap, current.profile, profile,
     current.roadmap.selectedUniversityIds, generated.selectedUniversityIds,

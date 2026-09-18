@@ -3,7 +3,7 @@ import type { UniversityContactRepository } from '../../../application/ports/uni
 import { DatabaseUnavailableError } from '../../../application/ports/plan-repository.js';
 import { universityContactSchema, type UniversityContact } from '../../../domain/university/contact.js';
 
-function fromStored(row: StoredContact): UniversityContact | null {
+export function toUniversityContact(row: StoredContact): UniversityContact | null {
   const parsed = universityContactSchema.safeParse({
     id: row.id,
     universityId: row.universityId,
@@ -24,7 +24,7 @@ export class PrismaUniversityContactRepository implements UniversityContactRepos
   async findByUniversityId(universityId: string): Promise<UniversityContact[]> {
     try {
       const rows = await this.client.universityContact.findMany({ where: { universityId } });
-      return rows.map(fromStored).filter((contact): contact is UniversityContact => contact !== null);
+      return rows.map(toUniversityContact).filter((contact): contact is UniversityContact => contact !== null);
     } catch {
       throw new DatabaseUnavailableError();
     }

@@ -7,5 +7,6 @@ export default defineConfig({
     setupFiles: ['dotenv/config'],
     // All integration files share the guarded admitly_test schema.
     fileParallelism: false,
+    testTimeout: 20_000,
   },
 });

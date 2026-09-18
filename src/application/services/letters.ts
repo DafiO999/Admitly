@@ -6,6 +6,8 @@ import {
 import type { UniversityContactRepository } from '../ports/university-contact-repository.js';
 import { findSendableContact } from './admissions-contact.js';
 import { normalizeGpa } from '../../domain/profile/normalize.js';
+import { createProfileHash } from '../../domain/profile/hash.js';
+import { createLetterUniversityHash } from '../../domain/letter/context.js';
 import { parseGroundedLetterDrafts } from '../../domain/letter/draft-guard.js';
 import {
   createLetterRequestSchema, generateLetterDraftsRequestSchema, letterContentRequestSchema,
@@ -106,6 +108,7 @@ export async function generateLetterDrafts(
   if (!drafts) throw new AiDraftGenerationFailedError(false);
   return repository.saveGeneration({
     letterId: id, promptVersion: LETTER_DRAFT_PROMPT_VERSION,
+    profileHash: createProfileHash(profile), universityHash: createLetterUniversityHash(university),
     ...(request.additionalContext ? { additionalContext: request.additionalContext } : {}),
     inputSnapshot: input, drafts,
   });

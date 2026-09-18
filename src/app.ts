@@ -86,6 +86,12 @@ export function buildApp(
     contactRepository = new PrismaUniversityContactRepository(databaseClientFactory());
     return contactRepository;
   };
+  const optionalRoadmapContacts = () => {
+    if (dependencies.contactRepository) return dependencies.contactRepository;
+    if (dependencies.universityProvider || dependencies.requirementProvider
+      || dependencies.planRepository) return null;
+    return loadEnvironment(process.env).DATABASE_URL ? contactRepositoryFactory() : null;
+  };
   const letterRepositoryFactory = () => {
     if (dependencies.letterRepository) return dependencies.letterRepository;
     if (letterRepository) return letterRepository;
@@ -167,7 +173,7 @@ export function buildApp(
     };
   };
   app.register(comparisonRoutes(providerFactory));
-  app.register(roadmapRoutes(providerFactory, aiProviderFactory));
-  app.register(planPersistenceRoutes(providerFactory, planRepositoryFactory));
+  app.register(roadmapRoutes(providerFactory, aiProviderFactory, optionalRoadmapContacts));
+  app.register(planPersistenceRoutes(providerFactory, planRepositoryFactory, optionalRoadmapContacts));
   return app;
 }

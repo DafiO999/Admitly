@@ -40,4 +40,24 @@ describe('completed roadmap task preservation', () => {
     expect(merged.items.find((item) => item.id === 'research:programs')?.status).toBe('pending');
     expect(merged.items.find((item) => item.id === 'document:academic-records')?.status).toBe('done');
   });
+
+  it('keeps a sent email done across recalculation and reopens it for a different recipient', () => {
+    const university = demoUniversities[0]!;
+    const id = `school:${university.id}:email`;
+    const school = (email: string) => ({ university, requirements: [], admissionsContact: {
+      email, sourceUrl: 'https://example.edu/admissions', sourceStatus: 'official' as const,
+    } });
+    const sent = buildRoadmap(canonicalDemoProfile, [school('admissions@example.edu')], {
+      [id]: 'done',
+    }).roadmap;
+    const recalculated = buildRoadmap(canonicalDemoProfile, [school('admissions@example.edu')]).roadmap;
+    const unchanged = preserveCompletedTasks(sent, recalculated, canonicalDemoProfile,
+      canonicalDemoProfile, [university.id], [university.id]);
+    expect(unchanged.items.find((item) => item.id === id)?.status).toBe('done');
+    expect(unchanged.progress.done).toBe(1);
+    const changedRecipient = buildRoadmap(canonicalDemoProfile, [school('new@example.edu')]).roadmap;
+    const changed = preserveCompletedTasks(sent, changedRecipient, canonicalDemoProfile,
+      canonicalDemoProfile, [university.id], [university.id]);
+    expect(changed.items.find((item) => item.id === id)?.status).toBe('pending');
+  });
 });

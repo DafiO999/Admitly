@@ -8,7 +8,7 @@ export const letterPurposeSchema = z.enum([
 export type LetterPurpose = z.infer<typeof letterPurposeSchema>;
 
 export const letterStatusSchema = z.enum([
-  'created', 'drafts_generated', 'draft_selected', 'ready_to_send', 'sending', 'sent', 'failed',
+  'created', 'drafts_generated', 'draft_selected', 'ready_to_send', 'sending', 'sent', 'failed', 'superseded',
 ]);
 export type LetterStatus = z.infer<typeof letterStatusSchema>;
 

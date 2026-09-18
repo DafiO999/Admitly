@@ -112,4 +112,20 @@ describe('roadmap builder', () => {
     expect(application.sourceStatus).toBe('unknown');
     expect(application.dueDate).toBeUndefined();
   });
+
+  it('adds a sourced email task and only the allowed letter fields for a verified contact', () => {
+    const withContact = buildRoadmap(canonicalDemoProfile, [{ ...schools[0]!, admissionsContact: {
+      email: 'admissions@example.edu', sourceUrl: 'https://example.edu/admissions',
+      sourceStatus: 'verified' as const,
+    } }]).roadmap;
+    const email = withContact.items.find((item) => item.category === 'university_email')!;
+    expect(email.id).toBe('school:demo-redwood-state:email');
+    expect(email.dependsOnIds).toEqual(['school:demo-redwood-state:verify']);
+    expect(email.sourceStatus).toBe('verified');
+    expect(email.letter).toEqual({ universityId: 'demo-redwood-state',
+      recipientEmail: 'admissions@example.edu', body: '' });
+    expect(withContact.progress).toEqual({ done: 0, total: withContact.items.length, percent: 0 });
+    expect(buildRoadmap(canonicalDemoProfile, [schools[0]!]).roadmap.items
+      .some((item) => item.category === 'university_email')).toBe(false);
+  });
 });

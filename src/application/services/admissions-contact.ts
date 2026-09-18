@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import type { UniversityContactRepository } from '../ports/university-contact-repository.js';
-import { isSendableContact, type UniversityContact } from '../../domain/university/contact.js';
+import { selectSendableContact, type UniversityContact } from '../../domain/university/contact.js';
 
 export class UniversityEmailUnavailableError extends Error {
   constructor() {
@@ -9,21 +9,13 @@ export class UniversityEmailUnavailableError extends Error {
   }
 }
 
-const contactPriority: Record<UniversityContact['kind'], number> = {
-  international_admissions: 0,
-  undergraduate_admissions: 1,
-  general_admissions: 2,
-};
-
 export async function findSendableContact(
   universityId: unknown,
   repositoryFactory: () => UniversityContactRepository,
 ): Promise<UniversityContact> {
   const id = z.string().min(1).parse(universityId);
   const contacts = await repositoryFactory().findByUniversityId(id);
-  const contact = contacts.filter((item) => item.universityId === id && isSendableContact(item))
-    .sort((a, b) => contactPriority[a.kind] - contactPriority[b.kind]
-      || b.verifiedAt.localeCompare(a.verifiedAt) || a.id.localeCompare(b.id))[0];
+  const contact = selectSendableContact(id, contacts);
   if (!contact) throw new UniversityEmailUnavailableError();
   return contact;
 }

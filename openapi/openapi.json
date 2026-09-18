@@ -1614,7 +1614,8 @@
                   "ready_to_send",
                   "sending",
                   "sent",
-                  "failed"
+                  "failed",
+                  "superseded"
                 ]
               },
               "senderName": {
@@ -1838,7 +1839,8 @@
                   "ready_to_send",
                   "sending",
                   "sent",
-                  "failed"
+                  "failed",
+                  "superseded"
                 ]
               },
               "senderName": {
@@ -2090,7 +2092,8 @@
                   "ready_to_send",
                   "sending",
                   "sent",
-                  "failed"
+                  "failed",
+                  "superseded"
                 ]
               },
               "senderName": {
@@ -2283,7 +2286,8 @@
                   "ready_to_send",
                   "sending",
                   "sent",
-                  "failed"
+                  "failed",
+                  "superseded"
                 ]
               },
               "senderName": {
@@ -2728,7 +2732,8 @@
                         "application",
                         "academic",
                         "activity",
-                        "research"
+                        "research",
+                        "university_email"
                       ]
                     },
                     "dueDate": {
@@ -2772,6 +2777,30 @@
                     },
                     "isNextAction": {
                       "type": "boolean"
+                    },
+                    "letter": {
+                      "type": "object",
+                      "properties": {
+                        "universityId": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "recipientEmail": {
+                          "type": "string",
+                          "format": "email",
+                          "pattern": "^(?:[A-Za-z0-9_'+\\-]+\\.)*[A-Za-z0-9_'+\\-]*[A-Za-z0-9_+-]@(?:[A-Za-z0-9][A-Za-z0-9\\-]*\\.)+[A-Za-z]{2,}$"
+                        },
+                        "body": {
+                          "type": "string",
+                          "maxLength": 5000
+                        }
+                      },
+                      "required": [
+                        "universityId",
+                        "recipientEmail",
+                        "body"
+                      ],
+                      "additionalProperties": false
                     }
                   },
                   "required": [
@@ -2796,12 +2825,39 @@
                     "type": "null"
                   }
                 ]
+              },
+              "progress": {
+                "type": "object",
+                "properties": {
+                  "done": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 9007199254740991
+                  },
+                  "total": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 9007199254740991
+                  },
+                  "percent": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 100
+                  }
+                },
+                "required": [
+                  "done",
+                  "total",
+                  "percent"
+                ],
+                "additionalProperties": false
               }
             },
             "required": [
               "rulesVersion",
               "items",
-              "nextActionId"
+              "nextActionId",
+              "progress"
             ],
             "additionalProperties": false
           },
@@ -3655,7 +3711,8 @@
                         "application",
                         "academic",
                         "activity",
-                        "research"
+                        "research",
+                        "university_email"
                       ]
                     },
                     "dueDate": {
@@ -3699,6 +3756,30 @@
                     },
                     "isNextAction": {
                       "type": "boolean"
+                    },
+                    "letter": {
+                      "type": "object",
+                      "properties": {
+                        "universityId": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "recipientEmail": {
+                          "type": "string",
+                          "format": "email",
+                          "pattern": "^(?:[A-Za-z0-9_'+\\-]+\\.)*[A-Za-z0-9_'+\\-]*[A-Za-z0-9_+-]@(?:[A-Za-z0-9][A-Za-z0-9\\-]*\\.)+[A-Za-z]{2,}$"
+                        },
+                        "body": {
+                          "type": "string",
+                          "maxLength": 5000
+                        }
+                      },
+                      "required": [
+                        "universityId",
+                        "recipientEmail",
+                        "body"
+                      ],
+                      "additionalProperties": false
                     }
                   },
                   "required": [
@@ -3724,6 +3805,32 @@
                   }
                 ]
               },
+              "progress": {
+                "type": "object",
+                "properties": {
+                  "done": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 9007199254740991
+                  },
+                  "total": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 9007199254740991
+                  },
+                  "percent": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 100
+                  }
+                },
+                "required": [
+                  "done",
+                  "total",
+                  "percent"
+                ],
+                "additionalProperties": false
+              },
               "id": {
                 "type": "string",
                 "format": "uuid",
@@ -3740,6 +3847,7 @@
               "rulesVersion",
               "items",
               "nextActionId",
+              "progress",
               "id",
               "selectedUniversityIds"
             ],
@@ -3822,7 +3930,8 @@
                         "application",
                         "academic",
                         "activity",
-                        "research"
+                        "research",
+                        "university_email"
                       ]
                     },
                     "dueDate": {
@@ -3866,6 +3975,30 @@
                     },
                     "isNextAction": {
                       "type": "boolean"
+                    },
+                    "letter": {
+                      "type": "object",
+                      "properties": {
+                        "universityId": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "recipientEmail": {
+                          "type": "string",
+                          "format": "email",
+                          "pattern": "^(?:[A-Za-z0-9_'+\\-]+\\.)*[A-Za-z0-9_'+\\-]*[A-Za-z0-9_+-]@(?:[A-Za-z0-9][A-Za-z0-9\\-]*\\.)+[A-Za-z]{2,}$"
+                        },
+                        "body": {
+                          "type": "string",
+                          "maxLength": 5000
+                        }
+                      },
+                      "required": [
+                        "universityId",
+                        "recipientEmail",
+                        "body"
+                      ],
+                      "additionalProperties": false
                     }
                   },
                   "required": [
@@ -3891,6 +4024,32 @@
                   }
                 ]
               },
+              "progress": {
+                "type": "object",
+                "properties": {
+                  "done": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 9007199254740991
+                  },
+                  "total": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 9007199254740991
+                  },
+                  "percent": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 100
+                  }
+                },
+                "required": [
+                  "done",
+                  "total",
+                  "percent"
+                ],
+                "additionalProperties": false
+              },
               "id": {
                 "type": "string",
                 "format": "uuid",
@@ -3907,6 +4066,7 @@
               "rulesVersion",
               "items",
               "nextActionId",
+              "progress",
               "id",
               "selectedUniversityIds"
             ],
