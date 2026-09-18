@@ -23,7 +23,10 @@ ENV NODE_ENV=production \
 WORKDIR /app
 RUN apt-get update \
     && apt-get install -y --no-install-recommends ca-certificates openssl \
-    && rm -rf /var/lib/apt/lists/*
+    && rm -rf /var/lib/apt/lists/* \
+    && mkdir -p /data/uploads \
+    && chown -R node:node /data/uploads \
+    && chmod 700 /data/uploads
 
 COPY --from=build --chown=node:node /app/package.json ./package.json
 COPY --from=build --chown=node:node /app/prisma.config.ts ./prisma.config.ts

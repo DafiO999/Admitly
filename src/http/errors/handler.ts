@@ -9,10 +9,15 @@ import { RoadmapProgramMismatchError, RoadmapUniversityNotFoundError } from '../
 import { UniversityEmailUnavailableError } from '../../application/services/admissions-contact.js';
 import { LetterNotEditableError, LetterNotFoundError, LetterVariantNotFoundError } from '../../application/ports/letter-repository.js';
 import { AiDraftGenerationFailedError, InvalidReplyToError } from '../../application/services/letters.js';
+import {
+  AttachmentNotFoundError, AttachmentTooLargeError, InvalidFileError,
+  LetterAttachmentTotalLimitError, UnsupportedAttachmentTypeError,
+} from '../../application/ports/letter-attachment-repository.js';
 
 type ErrorCode = 'VALIDATION' | 'REQUEST_TOO_LARGE' | 'NOT_FOUND' | 'CONFLICT'
   | 'EXTERNAL_UNAVAILABLE' | 'DATABASE_UNAVAILABLE' | 'INTERNAL' | 'UNIVERSITY_EMAIL_UNAVAILABLE'
-  | 'LETTER_NOT_FOUND' | 'LETTER_NOT_EDITABLE' | 'INVALID_REPLY_TO' | 'AI_DRAFT_GENERATION_FAILED';
+  | 'LETTER_NOT_FOUND' | 'LETTER_NOT_EDITABLE' | 'INVALID_REPLY_TO' | 'AI_DRAFT_GENERATION_FAILED'
+  | 'UNSUPPORTED_ATTACHMENT_TYPE' | 'ATTACHMENT_TOO_LARGE' | 'LETTER_ATTACHMENT_TOTAL_LIMIT' | 'INVALID_FILE';
 
 function errorResponse(code: ErrorCode, message: string) {
   return { error: { code, message, details: [] } };
@@ -53,6 +58,26 @@ export function registerErrorHandlers(app: FastifyInstance): void {
 
     if (error instanceof LetterNotFoundError || error instanceof LetterVariantNotFoundError) {
       return send(404, 'LETTER_NOT_FOUND', 'Letter or variant not found');
+    }
+
+    if (error instanceof AttachmentNotFoundError) {
+      return send(404, 'NOT_FOUND', 'Attachment not found');
+    }
+
+    if (error instanceof UnsupportedAttachmentTypeError) {
+      return send(415, 'UNSUPPORTED_ATTACHMENT_TYPE', 'Unsupported attachment type');
+    }
+
+    if (error instanceof AttachmentTooLargeError) {
+      return send(413, 'ATTACHMENT_TOO_LARGE', 'Attachment too large');
+    }
+
+    if (error instanceof LetterAttachmentTotalLimitError) {
+      return send(413, 'LETTER_ATTACHMENT_TOTAL_LIMIT', 'Letter attachment total limit exceeded');
+    }
+
+    if (error instanceof InvalidFileError) {
+      return send(400, 'INVALID_FILE', 'Invalid attachment');
     }
 
     if (error instanceof LetterNotEditableError) {

@@ -9,6 +9,7 @@ import { recommendationRequestSchema } from '../application/services/recommendat
 import { roadmapRequestSchema } from '../application/services/roadmap.js';
 import { createLetterRequestSchema, generateLetterDraftsRequestSchema, letterContentRequestSchema,
   letterPurposeSchema, letterStatusSchema, letterVariantTypeSchema } from '../domain/letter/schema.js';
+import { attachmentMetadataSchema } from '../domain/letter/attachment.js';
 import { diagnosisSchema } from '../domain/diagnosis/schema.js';
 import { studentProfileSchema } from '../domain/profile/schema.js';
 import { recommendationExplanationSchema, recommendationSchema, recommendedUniversitySchema } from '../domain/recommendation/schema.js';
@@ -28,7 +29,8 @@ const errorSchema = z.object({
   error: z.object({
     code: z.enum(['VALIDATION', 'REQUEST_TOO_LARGE', 'NOT_FOUND', 'CONFLICT',
       'EXTERNAL_UNAVAILABLE', 'DATABASE_UNAVAILABLE', 'INTERNAL', 'UNIVERSITY_EMAIL_UNAVAILABLE',
-      'LETTER_NOT_FOUND', 'LETTER_NOT_EDITABLE', 'INVALID_REPLY_TO', 'AI_DRAFT_GENERATION_FAILED']),
+      'LETTER_NOT_FOUND', 'LETTER_NOT_EDITABLE', 'INVALID_REPLY_TO', 'AI_DRAFT_GENERATION_FAILED',
+      'UNSUPPORTED_ATTACHMENT_TYPE', 'ATTACHMENT_TOO_LARGE', 'LETTER_ATTACHMENT_TOTAL_LIMIT', 'INVALID_FILE']),
     message: z.string(),
     details: z.array(z.unknown()),
   }).strict(),
@@ -108,6 +110,9 @@ const schemas = {
   LetterDraftsResponse: letterGenerationResponseSchema,
   LetterContentRequest: letterContentRequestSchema,
   LetterContentResponse: z.object({ letter: letterRecordSchema }).strict(),
+  AttachmentUploadResponse: z.object({ attachment: attachmentMetadataSchema }).strict(),
+  AttachmentListResponse: z.object({ attachments: z.array(attachmentMetadataSchema) }).strict(),
+  AttachmentDeleteResponse: z.object({ deleted: z.literal(true) }).strict(),
   RoadmapRequest: roadmapRequestSchema,
   RoadmapResponse: roadmapResponseSchema,
   SaveProfileRequest: saveProfileRequestSchema,
@@ -129,7 +134,8 @@ function operation(
     summary,
     ...(params.length ? { parameters: params.map((name) => ({
       name, in: 'path', required: true,
-      schema: json(name === 'profileId' || name === 'roadmapId' || name === 'letterId' ? z.uuid() : z.string().min(1)),
+      schema: json(name === 'profileId' || name === 'roadmapId' || name === 'letterId'
+        || name === 'attachmentId' ? z.uuid() : z.string().min(1)),
     })) } : {}),
     ...(request ? { requestBody: {
       required: true, content: { 'application/json': { schema: ref(request) } },
@@ -176,6 +182,20 @@ export function generateOpenApiDocument() {
       [path(apiPaths.letterContent)]: { put: operation('selectAdmissionLetterContent',
         'Select and edit final letter content', 'LetterContentResponse', 'LetterContentRequest',
         ['letterId'], [400, 404, 409, 413, 503]) },
+      [path(apiPaths.letterAttachments)]: {
+        post: {
+          ...operation('uploadLetterAttachment', 'Upload one private letter attachment',
+            'AttachmentUploadResponse', undefined, ['letterId'], [400, 404, 409, 413, 415, 503]),
+          requestBody: { required: true, content: { 'multipart/form-data': { schema: {
+            type: 'object', required: ['file'], properties: { file: { type: 'string', format: 'binary' } },
+          } } } },
+        },
+        get: operation('listLetterAttachments', 'List letter attachment metadata',
+          'AttachmentListResponse', undefined, ['letterId'], [400, 404, 503]),
+      },
+      [path(apiPaths.letterAttachment)]: { delete: operation('deleteLetterAttachment',
+        'Delete one private letter attachment', 'AttachmentDeleteResponse', undefined,
+        ['letterId', 'attachmentId'], [400, 404, 409, 503]) },
       [path(apiPaths.roadmap)]: { post: operation('createRoadmap', 'Build a roadmap',
         'RoadmapResponse', 'RoadmapRequest', [], [400, 404, 413, 422, 502, 503]) },
       [path(apiPaths.profile)]: { put: operation('saveProfile', 'Save a profile and plan',

@@ -10,6 +10,7 @@ coverage/
 .pnpm-store/
 .vitest/
 /backups/
+/.data/
 *.dump
 /DOCS/
 .env

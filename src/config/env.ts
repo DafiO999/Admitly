@@ -22,7 +22,19 @@ const environmentSchema = z.object({
   GEMINI_API_KEY: optionalString,
   GEMINI_MODEL: optionalString,
   COLLEGE_SCORECARD_API_KEY: optionalString,
+  LETTER_UPLOAD_DIR: optionalString,
+  LETTER_ATTACHMENT_MAX_FILE_BYTES: z.coerce.number().int().min(1).max(100 * 1024 * 1024).default(10 * 1024 * 1024),
+  LETTER_ATTACHMENT_MAX_TOTAL_BYTES: z.coerce.number().int().min(1).max(500 * 1024 * 1024).default(20 * 1024 * 1024),
 }).superRefine((value, context) => {
+  if (value.LETTER_ATTACHMENT_MAX_TOTAL_BYTES < value.LETTER_ATTACHMENT_MAX_FILE_BYTES) {
+    context.addIssue({ code: 'custom', path: ['LETTER_ATTACHMENT_MAX_TOTAL_BYTES'],
+      message: 'Total attachment limit must be at least the per-file limit' });
+  }
+  if (value.NODE_ENV === 'production' && value.LETTER_UPLOAD_DIR
+    && value.LETTER_UPLOAD_DIR !== '/data/uploads') {
+    context.addIssue({ code: 'custom', path: ['LETTER_UPLOAD_DIR'],
+      message: 'Production attachments must use the mounted /data/uploads directory' });
+  }
   if (value.NODE_ENV === 'production' && !value.DATABASE_URL) {
     context.addIssue({
       code: 'custom',

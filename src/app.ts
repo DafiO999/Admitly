@@ -1,8 +1,12 @@
 import Fastify, { LogController, type FastifyServerOptions } from 'fastify';
+import multipart from '@fastify/multipart';
+import { resolve } from 'node:path';
 import type { UniversityProvider } from './application/ports/university-provider.js';
 import type { UniversityContactRepository } from './application/ports/university-contact-repository.js';
 import type { LetterRepository } from './application/ports/letter-repository.js';
 import type { LetterDraftProvider } from './application/ports/letter-draft-provider.js';
+import type { LetterAttachmentRepository } from './application/ports/letter-attachment-repository.js';
+import type { FileStorage } from './application/ports/file-storage.js';
 import type { AdmissionRequirementProvider } from './application/ports/admission-requirement-provider.js';
 import type { AiProvider } from './application/ports/ai-provider.js';
 import { DatabaseUnavailableError, type PlanRepository } from './application/ports/plan-repository.js';
@@ -11,6 +15,7 @@ import { registerErrorHandlers } from './http/errors/handler.js';
 import { comparisonRoutes } from './http/routes/comparison.js';
 import { admissionsContactRoutes } from './http/routes/admissions-contact.js';
 import { letterRoutes } from './http/routes/letters.js';
+import { letterAttachmentRoutes } from './http/routes/letter-attachments.js';
 import { diagnosisRoutes } from './http/routes/diagnosis.js';
 import { healthRoutes } from './http/routes/health.js';
 import { planPersistenceRoutes } from './http/routes/plan-persistence.js';
@@ -23,7 +28,9 @@ import { createPrismaClient } from './infrastructure/db/prisma/client.js';
 import { PrismaPlanRepository } from './infrastructure/db/repositories/prisma-plan-repository.js';
 import { PrismaUniversityContactRepository } from './infrastructure/db/repositories/prisma-university-contact-repository.js';
 import { PrismaLetterRepository } from './infrastructure/db/repositories/prisma-letter-repository.js';
+import { PrismaLetterAttachmentRepository } from './infrastructure/db/repositories/prisma-letter-attachment-repository.js';
 import { createLetterDraftProvider } from './infrastructure/letter-draft-provider.js';
+import { LocalFileStorage } from './infrastructure/storage/local-file-storage.js';
 
 export function buildApp(
   options: FastifyServerOptions = {},
@@ -35,6 +42,9 @@ export function buildApp(
     contactRepository?: UniversityContactRepository;
     letterRepository?: LetterRepository;
     letterDraftProvider?: LetterDraftProvider | null;
+    attachmentRepository?: LetterAttachmentRepository;
+    fileStorage?: FileStorage;
+    attachmentLimits?: { maxFileBytes: number; maxTotalBytes: number };
     readinessCheck?: () => Promise<void>;
   } = {},
 ) {
@@ -45,6 +55,8 @@ export function buildApp(
   let planRepository: PlanRepository | undefined;
   let contactRepository: UniversityContactRepository | undefined;
   let letterRepository: LetterRepository | undefined;
+  let attachmentRepository: LetterAttachmentRepository | undefined;
+  let fileStorage: FileStorage | undefined;
   const databaseClientFactory = () => {
     if (databaseClient) return databaseClient;
     const databaseUrl = loadEnvironment(process.env).DATABASE_URL;
@@ -72,6 +84,27 @@ export function buildApp(
   };
   const letterDraftProviderFactory = () => dependencies.letterDraftProvider === undefined
     ? createLetterDraftProvider(loadEnvironment(process.env)) : dependencies.letterDraftProvider;
+  const attachmentRepositoryFactory = () => {
+    if (dependencies.attachmentRepository) return dependencies.attachmentRepository;
+    if (attachmentRepository) return attachmentRepository;
+    attachmentRepository = new PrismaLetterAttachmentRepository(databaseClientFactory());
+    return attachmentRepository;
+  };
+  const fileStorageFactory = () => {
+    if (dependencies.fileStorage) return dependencies.fileStorage;
+    if (fileStorage) return fileStorage;
+    const environment = loadEnvironment(process.env);
+    fileStorage = new LocalFileStorage(environment.LETTER_UPLOAD_DIR
+      ?? (environment.NODE_ENV === 'production' ? '/data/uploads' : resolve('.data/uploads')));
+    return fileStorage;
+  };
+  const attachmentLimitsFactory = () => dependencies.attachmentLimits ?? (() => {
+    const environment = loadEnvironment(process.env);
+    return {
+      maxFileBytes: environment.LETTER_ATTACHMENT_MAX_FILE_BYTES,
+      maxTotalBytes: environment.LETTER_ATTACHMENT_MAX_TOTAL_BYTES,
+    };
+  })();
   const checkReadiness = dependencies.readinessCheck ?? (async () => {
     try {
       const client = databaseClientFactory();
@@ -83,9 +116,12 @@ export function buildApp(
   });
   app.addHook('onClose', async () => databaseClient?.$disconnect());
   registerErrorHandlers(app);
+  app.register(multipart);
   app.register(healthRoutes(checkReadiness));
   app.register(admissionsContactRoutes(contactRepositoryFactory));
   app.register(letterRoutes(contactRepositoryFactory, letterRepositoryFactory, letterDraftProviderFactory));
+  app.register(letterAttachmentRoutes(letterRepositoryFactory, attachmentRepositoryFactory,
+    fileStorageFactory, attachmentLimitsFactory));
   app.register(diagnosisRoutes(aiProviderFactory));
   app.register(recommendationRoutes(
     () => dependencies.universityProvider ?? createUniversityProvider(loadEnvironment(process.env)),

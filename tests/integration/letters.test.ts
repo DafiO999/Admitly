@@ -1,4 +1,7 @@
 import { randomUUID } from 'node:crypto';
+import { mkdtemp, readdir, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { buildApp } from '../../src/app.js';
 import type { LetterDraftProvider } from '../../src/application/ports/letter-draft-provider.js';
@@ -7,12 +10,39 @@ import { generatedLetterDraftsSchema, type GenerateLetterDraftsInput } from '../
 import { normalizeGpa } from '../../src/domain/profile/normalize.js';
 import { createPrismaClient } from '../../src/infrastructure/db/prisma/client.js';
 import { PrismaLetterRepository } from '../../src/infrastructure/db/repositories/prisma-letter-repository.js';
+import { PrismaLetterAttachmentRepository } from '../../src/infrastructure/db/repositories/prisma-letter-attachment-repository.js';
 import { PrismaUniversityContactRepository } from '../../src/infrastructure/db/repositories/prisma-university-contact-repository.js';
 import { canonicalDemoProfile, demoUniversities } from '../../src/infrastructure/demo/fixtures.js';
-import { seedDemoData } from '../../src/infrastructure/demo/seed.js';
+import { LocalFileStorage } from '../../src/infrastructure/storage/local-file-storage.js';
 import { getTestDatabaseUrl } from './test-database-url.js';
 
 const databaseUrl = getTestDatabaseUrl(process.env);
+const pdf = Buffer.from('%PDF-1.4\nprivate certificate\n');
+
+function multipartFile(filename: string, mimetype: string, content: Buffer) {
+  const boundary = 'admitly-attachment-boundary';
+  return {
+    headers: { 'content-type': `multipart/form-data; boundary=${boundary}` },
+    payload: Buffer.concat([
+      Buffer.from(`--${boundary}\r\nContent-Disposition: form-data; name="file"; filename="${filename}"\r\nContent-Type: ${mimetype}\r\n\r\n`),
+      content,
+      Buffer.from(`\r\n--${boundary}--\r\n`),
+    ]),
+  };
+}
+
+function multipartTwoFiles(content: Buffer) {
+  const boundary = 'admitly-attachment-boundary';
+  const part = (name: string) => Buffer.concat([
+    Buffer.from(`--${boundary}\r\nContent-Disposition: form-data; name="file"; filename="${name}"\r\nContent-Type: application/pdf\r\n\r\n`),
+    content,
+    Buffer.from('\r\n'),
+  ]);
+  return {
+    headers: { 'content-type': `multipart/form-data; boundary=${boundary}` },
+    payload: Buffer.concat([part('one.pdf'), part('two.pdf'), Buffer.from(`--${boundary}--\r\n`)]),
+  };
+}
 
 function safeDrafts(input: GenerateLetterDraftsInput) {
   const bank = letterDraftSentenceBank(input);
@@ -29,9 +59,12 @@ describe('admission letter persistence and routes', () => {
     const client = createPrismaClient(databaseUrl!);
     const contacts = new PrismaUniversityContactRepository(client);
     const letters = new PrismaLetterRepository(client);
+    const attachments = new PrismaLetterAttachmentRepository(client);
+    const uploadDir = await mkdtemp(join(tmpdir(), 'admitly-integration-files-'));
+    const storage = new LocalFileStorage(uploadDir);
     const profileId = randomUUID();
     const contactId = randomUUID();
-    const universityId = demoUniversities[0]!.id;
+    const universityId = `letter-test-${randomUUID()}`;
     const profile = { ...canonicalDemoProfile, id: profileId };
     let invalidDraft = false;
     const provider: LetterDraftProvider = {
@@ -43,9 +76,14 @@ describe('admission letter persistence and routes', () => {
     };
     const app = buildApp({}, {
       contactRepository: contacts, letterRepository: letters, letterDraftProvider: provider,
+      attachmentRepository: attachments, fileStorage: storage,
+      attachmentLimits: { maxFileBytes: 50, maxTotalBytes: 40 },
     });
     try {
-      await seedDemoData(client);
+      await client.university.create({ data: {
+        id: universityId, provider: 'demo', name: 'Test University',
+        programs: demoUniversities[0]!.programs, sourceStatus: 'demo',
+      } });
       await client.profile.create({ data: {
         id: profileId, payload: profile, profileHash: 'letter-test',
         targetField: profile.targetField, targetIntakeYear: profile.targetIntakeYear,
@@ -81,6 +119,48 @@ describe('admission letter persistence and routes', () => {
       expect(created.json().recipientEmail).toBe('admissions@example.edu');
       expect(created.json().letter.universityContactId).toBe(contactId);
       const letterId = created.json().letter.id as string;
+      const attachmentsUrl = `/api/letters/${letterId}/attachments`;
+      const uploaded = await app.inject({ method: 'POST', url: attachmentsUrl,
+        ...multipartFile('..\\..\\certificate.pdf', 'application/pdf', pdf) });
+      expect(uploaded.statusCode, uploaded.body).toBe(200);
+      expect(uploaded.json().attachment).toMatchObject({ originalName: 'certificate.pdf',
+        mimeType: 'application/pdf', sizeBytes: pdf.length });
+      expect(uploaded.body).not.toContain('storageKey');
+      expect(uploaded.body).not.toContain(uploadDir);
+      const attachmentId = uploaded.json().attachment.id as string;
+      const storedAttachment = await client.letterAttachment.findUniqueOrThrow({ where: { id: attachmentId } });
+      expect((await app.inject({ method: 'GET', url: `/data/uploads/${storedAttachment.storageKey}` })).statusCode)
+        .toBe(404);
+      const listed = await app.inject({ method: 'GET', url: attachmentsUrl });
+      expect(listed.json().attachments).toEqual([uploaded.json().attachment]);
+      expect(await readdir(uploadDir)).toHaveLength(1);
+      const badType = await app.inject({ method: 'POST', url: attachmentsUrl,
+        ...multipartFile('note.txt', 'text/plain', Buffer.from('hello')) });
+      expect(badType.statusCode).toBe(415);
+      expect(badType.json().error.code).toBe('UNSUPPORTED_ATTACHMENT_TYPE');
+      const badSignature = await app.inject({ method: 'POST', url: attachmentsUrl,
+        ...multipartFile('fake.pdf', 'application/pdf', Buffer.from('not a PDF')) });
+      expect(badSignature.statusCode).toBe(400);
+      expect(badSignature.json().error.code).toBe('INVALID_FILE');
+      const tooLarge = await app.inject({ method: 'POST', url: attachmentsUrl,
+        ...multipartFile('large.pdf', 'application/pdf', Buffer.concat([pdf, Buffer.alloc(30)])) });
+      expect(tooLarge.statusCode).toBe(413);
+      expect(tooLarge.json().error.code).toBe('ATTACHMENT_TOO_LARGE');
+      const totalLimit = await app.inject({ method: 'POST', url: attachmentsUrl,
+        ...multipartFile('second.pdf', 'application/pdf', pdf) });
+      expect(totalLimit.statusCode).toBe(413);
+      expect(totalLimit.json().error.code).toBe('LETTER_ATTACHMENT_TOTAL_LIMIT');
+      const extraFile = await app.inject({ method: 'POST', url: attachmentsUrl,
+        ...multipartTwoFiles(pdf) });
+      expect(extraFile.statusCode).toBe(400);
+      expect(extraFile.json().error.code).toBe('INVALID_FILE');
+      expect(await readdir(uploadDir)).toHaveLength(1);
+      expect(await client.letterAttachment.count({ where: { letterId } })).toBe(1);
+      const deleted = await app.inject({ method: 'DELETE', url: `${attachmentsUrl}/${attachmentId}` });
+      expect(deleted.statusCode, deleted.body).toBe(200);
+      expect(deleted.json()).toEqual({ deleted: true });
+      expect(await readdir(uploadDir)).toEqual([]);
+      expect(await client.letterAttachment.count({ where: { letterId } })).toBe(0);
       const draftUrl = `/api/letters/${letterId}/drafts`;
       const first = await app.inject({ method: 'POST', url: draftUrl, payload: {} });
       expect(first.statusCode, first.body).toBe(200);
@@ -142,7 +222,9 @@ describe('admission letter persistence and routes', () => {
       await app.close();
       await client.profile.deleteMany({ where: { id: profileId } });
       await client.universityContact.deleteMany({ where: { id: contactId } });
+      await client.university.deleteMany({ where: { id: universityId } });
       await client.$disconnect();
+      await rm(uploadDir, { recursive: true, force: true });
     }
-  });
+  }, 15_000);
 });

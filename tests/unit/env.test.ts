@@ -8,6 +8,8 @@ describe('environment configuration', () => {
       HOST: '127.0.0.1',
       PORT: 3001,
       DEMO_DATA_MODE: true,
+      LETTER_ATTACHMENT_MAX_FILE_BYTES: 10485760,
+      LETTER_ATTACHMENT_MAX_TOTAL_BYTES: 20971520,
     });
   });
 
@@ -19,11 +21,16 @@ describe('environment configuration', () => {
     expect(() => loadEnvironment({ DEMO_DATA_MODE: 'false' })).toThrow('COLLEGE_SCORECARD_API_KEY');
     expect(() => loadEnvironment({ PORT: 'invalid' })).toThrow('PORT');
     expect(() => loadEnvironment({ DEMO_DATA_MODE: 'yes' })).toThrow('DEMO_DATA_MODE');
+    expect(() => loadEnvironment({ LETTER_ATTACHMENT_MAX_FILE_BYTES: '0' })).toThrow('LETTER_ATTACHMENT_MAX_FILE_BYTES');
+    expect(() => loadEnvironment({ LETTER_ATTACHMENT_MAX_FILE_BYTES: '30', LETTER_ATTACHMENT_MAX_TOTAL_BYTES: '20' }))
+      .toThrow('LETTER_ATTACHMENT_MAX_TOTAL_BYTES');
   });
 
   it('requires a PostgreSQL URL in production without exposing its value', () => {
     expect(() => loadEnvironment({ NODE_ENV: 'production' })).toThrow('DATABASE_URL');
     expect(() => loadEnvironment({ NODE_ENV: 'production', DATABASE_URL: 'private-secret' }))
       .toThrow('DATABASE_URL');
+    expect(() => loadEnvironment({ NODE_ENV: 'production', DATABASE_URL: 'postgresql://localhost/admitly',
+      LETTER_UPLOAD_DIR: 'relative/uploads' })).toThrow('LETTER_UPLOAD_DIR');
   });
 });

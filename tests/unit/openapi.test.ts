@@ -16,12 +16,13 @@ describe('generated API contract', () => {
       ['POST', apiPaths.comparison], ['POST', apiPaths.roadmap], ['PUT', apiPaths.profile],
       ['GET', apiPaths.admissionsContact],
       ['POST', apiPaths.createLetter], ['POST', apiPaths.letterDrafts], ['PUT', apiPaths.letterContent],
+      ['POST', apiPaths.letterAttachments], ['GET', apiPaths.letterAttachments], ['DELETE', apiPaths.letterAttachment],
       ['GET', apiPaths.plan], ['POST', apiPaths.recalculate], ['PATCH', apiPaths.roadmapItem],
     ] as const;
     const app = buildApp();
     try {
       await app.ready();
-      expect(Object.keys(document.paths)).toHaveLength(routes.length);
+      expect(Object.keys(document.paths)).toHaveLength(new Set(routes.map(([, route]) => route)).size);
       for (const [method, route] of routes) {
         expect(app.hasRoute({ method, url: route })).toBe(true);
         const path = route.replace(/:([A-Za-z][A-Za-z0-9]*)/g, '{$1}');

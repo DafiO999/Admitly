@@ -69,6 +69,13 @@ are rejected. Each successful generation keeps an immutable input and variant
 snapshot. `PUT /api/letters/:letterId/content` stores a separately editable
 final subject and body based on a variant from that letter. These endpoints do
 not send email.
+`POST /api/letters/:letterId/attachments` accepts one multipart `file` field
+containing a PDF, JPEG, or PNG. `GET` on the same path lists metadata, and
+`DELETE /api/letters/:letterId/attachments/:attachmentId` removes one file.
+Uploads are signature-checked, size-limited, and stored under randomized names
+in the private `.data/uploads` directory by default. The API never returns a
+storage path. Set `LETTER_UPLOAD_DIR`, `LETTER_ATTACHMENT_MAX_FILE_BYTES`, and
+`LETTER_ATTACHMENT_MAX_TOTAL_BYTES` to change storage and limits.
 Set `GEMINI_API_KEY` to enable optional Gemini wording. Pass
 `enhanceWithAi: true` to `POST /api/diagnosis`, or call
 `POST /api/recommendations/:universityId/explanation` with a profile. Both
@@ -122,8 +129,9 @@ runtime image includes the Prisma CLI and migrations for an explicit
 ## Production operations
 
 `deploy/compose.prod.yml` connects PostgreSQL, the API, and the frontend, and
-publishes only Caddy's HTTP and HTTPS ports. PostgreSQL and Caddy state use
-named volumes. Copy `deploy/env.production.example` to the ignored
+publishes only Caddy's HTTP and HTTPS ports. PostgreSQL, private attachments,
+and Caddy state use named volumes. The API stores attachments at `/data/uploads`
+in the `admitly_uploads` volume. Copy `deploy/env.production.example` to the ignored
 `deploy/.env.production` and replace the placeholders. On a Linux server with
 Docker Compose, run `bash deploy/scripts/deploy.sh` from the repository root. It
 validates Compose configuration, builds both app images, waits for PostgreSQL,
@@ -131,19 +139,29 @@ runs `prisma migrate deploy`, recreates the API, frontend, and Caddy, and checks
 database readiness. It does not remove named volumes. Caddy routes `/api/*` to
 the API and all other paths to the frontend.
 
-Run `bash deploy/scripts/backup-db.sh` to save a timestamped PostgreSQL custom
-dump under the ignored `backups/` directory. Set `BACKUP_DIR` to choose another
-host directory. Copy backups off the server as part of your backup policy.
-To restore, stop the application services, then name both the dump and target
-database explicitly:
+For a coherent database and attachment backup, stop the application services,
+then run both backup scripts before restarting them. They save a PostgreSQL dump
+and an uploads archive under the ignored `backups/` directory. Set `BACKUP_DIR`
+to choose another host directory and copy both files off the server.
+
+```bash
+docker compose -p admitly -f deploy/compose.prod.yml --env-file deploy/.env.production stop api web caddy
+bash deploy/scripts/backup-db.sh
+bash deploy/scripts/backup-uploads.sh
+bash deploy/scripts/deploy.sh
+```
+
+To restore, stop the application services and name the database dump, uploads
+archive, database, and volume explicitly:
 
 ```bash
 docker compose -p admitly -f deploy/compose.prod.yml --env-file deploy/.env.production stop api web caddy
 bash deploy/scripts/restore-db.sh backups/admitly_YYYY-MM-DD_HH-MM-SS.dump --confirm-db=admitly
+bash deploy/scripts/restore-uploads.sh backups/admitly_YYYY-MM-DD_HH-MM-SS.uploads.tar --confirm-volume=admitly_admitly_uploads
 bash deploy/scripts/deploy.sh
 ```
 
-Restore replaces objects contained in the dump. Keep a pre-restore backup and
+Restore replaces database objects and the target uploads volume contents. Keep a pre-restore backup and
 verify that the previous application revision is compatible with any newer
 database migrations before rolling back code. Set `ADMITLY_ENV_FILE` and
 `ADMITLY_PROJECT` to target a different environment or Compose project.

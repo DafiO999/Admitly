@@ -33,6 +33,11 @@ services:
       GEMINI_API_KEY: ${GEMINI_API_KEY:-}
       GEMINI_MODEL: ${GEMINI_MODEL:-gemini-3.8-flash}
       COLLEGE_SCORECARD_API_KEY: ${COLLEGE_SCORECARD_API_KEY:-}
+      LETTER_UPLOAD_DIR: ${LETTER_UPLOAD_DIR:-/data/uploads}
+      LETTER_ATTACHMENT_MAX_FILE_BYTES: ${LETTER_ATTACHMENT_MAX_FILE_BYTES:-10485760}
+      LETTER_ATTACHMENT_MAX_TOTAL_BYTES: ${LETTER_ATTACHMENT_MAX_TOTAL_BYTES:-20971520}
+    volumes:
+      - admitly_uploads:/data/uploads
     depends_on:
       db:
         condition: service_healthy
@@ -102,5 +107,6 @@ networks:
 
 volumes:
   postgres_data:
+  admitly_uploads:
   caddy_data:
   caddy_config:

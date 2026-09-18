@@ -9,6 +9,8 @@ export const apiPaths = {
   createLetter: '/api/universities/:universityId/letters',
   letterDrafts: '/api/letters/:letterId/drafts',
   letterContent: '/api/letters/:letterId/content',
+  letterAttachments: '/api/letters/:letterId/attachments',
+  letterAttachment: '/api/letters/:letterId/attachments/:attachmentId',
   roadmap: '/api/roadmap',
   profile: '/api/profile',
   plan: '/api/plan/:profileId',
