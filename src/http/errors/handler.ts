@@ -6,9 +6,10 @@ import { UniversityProviderError } from '../../application/ports/university-prov
 import { ComparisonUniversityNotFoundError } from '../../application/services/comparison.js';
 import { RecommendationNotFoundError } from '../../application/services/recommendation-explanation.js';
 import { RoadmapProgramMismatchError, RoadmapUniversityNotFoundError } from '../../application/services/roadmap.js';
+import { UniversityEmailUnavailableError } from '../../application/services/admissions-contact.js';
 
 type ErrorCode = 'VALIDATION' | 'REQUEST_TOO_LARGE' | 'NOT_FOUND' | 'CONFLICT'
-  | 'EXTERNAL_UNAVAILABLE' | 'DATABASE_UNAVAILABLE' | 'INTERNAL';
+  | 'EXTERNAL_UNAVAILABLE' | 'DATABASE_UNAVAILABLE' | 'INTERNAL' | 'UNIVERSITY_EMAIL_UNAVAILABLE';
 
 function errorResponse(code: ErrorCode, message: string) {
   return { error: { code, message, details: [] } };
@@ -41,6 +42,10 @@ export function registerErrorHandlers(app: FastifyInstance): void {
 
     if (error instanceof DatabaseUnavailableError) {
       return send(503, 'DATABASE_UNAVAILABLE', 'Database unavailable');
+    }
+
+    if (error instanceof UniversityEmailUnavailableError) {
+      return send(404, 'UNIVERSITY_EMAIL_UNAVAILABLE', 'University admissions email unavailable');
     }
 
     if (error instanceof PlanConflictError) {

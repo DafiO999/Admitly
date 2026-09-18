@@ -13,6 +13,7 @@ import { recommendationExplanationSchema, recommendationSchema, recommendedUnive
 import { roadmapSchema, sourceCoverageSchema } from '../domain/roadmap/schema.js';
 import { admissionRequirementSchema } from '../domain/university/requirement.js';
 import { universitySchema } from '../domain/university/schema.js';
+import { universityContactSchema } from '../domain/university/contact.js';
 import { apiPaths } from './routes/paths.js';
 
 const json = (schema: z.ZodType) => {
@@ -24,7 +25,7 @@ const json = (schema: z.ZodType) => {
 const errorSchema = z.object({
   error: z.object({
     code: z.enum(['VALIDATION', 'REQUEST_TOO_LARGE', 'NOT_FOUND', 'CONFLICT',
-      'EXTERNAL_UNAVAILABLE', 'DATABASE_UNAVAILABLE', 'INTERNAL']),
+      'EXTERNAL_UNAVAILABLE', 'DATABASE_UNAVAILABLE', 'INTERNAL', 'UNIVERSITY_EMAIL_UNAVAILABLE']),
     message: z.string(),
     details: z.array(z.unknown()),
   }).strict(),
@@ -45,6 +46,12 @@ const comparisonResponseSchema = z.object({
     university: universitySchema, recommendation: recommendationSchema.nullable(),
     requirements: z.array(admissionRequirementSchema), requirementsStatus: z.enum(['reported', 'unknown']),
   }).strict()),
+}).strict();
+const admissionsContactResponseSchema = z.object({
+  contact: universityContactSchema.pick({
+    universityId: true, kind: true, email: true, sourceUrl: true,
+    sourceStatus: true, verifiedAt: true,
+  }),
 }).strict();
 const roadmapResponseSchema = z.object({
   roadmap: roadmapSchema, sourceCoverage: sourceCoverageSchema,
@@ -78,6 +85,7 @@ const schemas = {
   ExplanationResponse: explanationResponseSchema,
   ComparisonRequest: comparisonRequestSchema,
   ComparisonResponse: comparisonResponseSchema,
+  AdmissionsContactResponse: admissionsContactResponseSchema,
   RoadmapRequest: roadmapRequestSchema,
   RoadmapResponse: roadmapResponseSchema,
   SaveProfileRequest: saveProfileRequestSchema,
@@ -134,6 +142,9 @@ export function generateOpenApiDocument() {
         'ExplanationResponse', 'ExplanationRequest', ['universityId'], [400, 404, 413, 502, 503]) },
       [path(apiPaths.comparison)]: { post: operation('compareUniversities', 'Compare two or three universities',
         'ComparisonResponse', 'ComparisonRequest', [], [400, 404, 413, 502, 503]) },
+      [path(apiPaths.admissionsContact)]: { get: operation('getAdmissionsContact',
+        'Get an active verified admissions contact', 'AdmissionsContactResponse',
+        undefined, ['universityId'], [400, 404, 503]) },
       [path(apiPaths.roadmap)]: { post: operation('createRoadmap', 'Build a roadmap',
         'RoadmapResponse', 'RoadmapRequest', [], [400, 404, 413, 422, 502, 503]) },
       [path(apiPaths.profile)]: { put: operation('saveProfile', 'Save a profile and plan',

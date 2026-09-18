@@ -54,6 +54,12 @@ development. `POST /api/diagnosis` returns a rules-based profile diagnosis.
 Its fit score describes profile match, not admission probability.
 `POST /api/comparison` compares two or three selected universities with the
 same fit scores and source-tagged requirements.
+`GET /api/universities/:universityId/admissions-contact` returns an active
+official or verified admissions contact, or `404 UNIVERSITY_EMAIL_UNAVAILABLE`.
+Contacts are stored in PostgreSQL with an HTTPS source URL and verification
+timestamp. The demo seed contains no admissions addresses because its schools
+are fictional; only independently verified real contacts should be curated
+through the backend repository. The API does not accept a recipient override.
 Set `GEMINI_API_KEY` to enable optional Gemini wording. Pass
 `enhanceWithAi: true` to `POST /api/diagnosis`, or call
 `POST /api/recommendations/:universityId/explanation` with a profile. Both

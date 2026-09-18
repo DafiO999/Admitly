@@ -5,6 +5,7 @@ export const apiPaths = {
   recommendations: '/api/recommendations',
   recommendationExplanation: '/api/recommendations/:universityId/explanation',
   comparison: '/api/comparison',
+  admissionsContact: '/api/universities/:universityId/admissions-contact',
   roadmap: '/api/roadmap',
   profile: '/api/profile',
   plan: '/api/plan/:profileId',

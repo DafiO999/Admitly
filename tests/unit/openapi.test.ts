@@ -14,6 +14,7 @@ describe('generated API contract', () => {
       ['GET', apiPaths.health], ['GET', apiPaths.ready], ['POST', apiPaths.diagnosis],
       ['POST', apiPaths.recommendations], ['POST', apiPaths.recommendationExplanation],
       ['POST', apiPaths.comparison], ['POST', apiPaths.roadmap], ['PUT', apiPaths.profile],
+      ['GET', apiPaths.admissionsContact],
       ['GET', apiPaths.plan], ['POST', apiPaths.recalculate], ['PATCH', apiPaths.roadmapItem],
     ] as const;
     const app = buildApp();

@@ -1,11 +1,13 @@
 import Fastify, { LogController, type FastifyServerOptions } from 'fastify';
 import type { UniversityProvider } from './application/ports/university-provider.js';
+import type { UniversityContactRepository } from './application/ports/university-contact-repository.js';
 import type { AdmissionRequirementProvider } from './application/ports/admission-requirement-provider.js';
 import type { AiProvider } from './application/ports/ai-provider.js';
 import { DatabaseUnavailableError, type PlanRepository } from './application/ports/plan-repository.js';
 import { loadEnvironment } from './config/env.js';
 import { registerErrorHandlers } from './http/errors/handler.js';
 import { comparisonRoutes } from './http/routes/comparison.js';
+import { admissionsContactRoutes } from './http/routes/admissions-contact.js';
 import { diagnosisRoutes } from './http/routes/diagnosis.js';
 import { healthRoutes } from './http/routes/health.js';
 import { planPersistenceRoutes } from './http/routes/plan-persistence.js';
@@ -16,6 +18,7 @@ import { createAiProvider } from './infrastructure/ai-provider.js';
 import { createUniversityProvider } from './infrastructure/university-provider.js';
 import { createPrismaClient } from './infrastructure/db/prisma/client.js';
 import { PrismaPlanRepository } from './infrastructure/db/repositories/prisma-plan-repository.js';
+import { PrismaUniversityContactRepository } from './infrastructure/db/repositories/prisma-university-contact-repository.js';
 
 export function buildApp(
   options: FastifyServerOptions = {},
@@ -24,6 +27,7 @@ export function buildApp(
     requirementProvider?: AdmissionRequirementProvider;
     aiProvider?: AiProvider | null;
     planRepository?: PlanRepository;
+    contactRepository?: UniversityContactRepository;
     readinessCheck?: () => Promise<void>;
   } = {},
 ) {
@@ -32,6 +36,7 @@ export function buildApp(
     ? createAiProvider(loadEnvironment(process.env)) : dependencies.aiProvider;
   let databaseClient: ReturnType<typeof createPrismaClient> | undefined;
   let planRepository: PlanRepository | undefined;
+  let contactRepository: UniversityContactRepository | undefined;
   const databaseClientFactory = () => {
     if (databaseClient) return databaseClient;
     const databaseUrl = loadEnvironment(process.env).DATABASE_URL;
@@ -45,6 +50,12 @@ export function buildApp(
     planRepository = new PrismaPlanRepository(databaseClientFactory());
     return planRepository;
   };
+  const contactRepositoryFactory = () => {
+    if (dependencies.contactRepository) return dependencies.contactRepository;
+    if (contactRepository) return contactRepository;
+    contactRepository = new PrismaUniversityContactRepository(databaseClientFactory());
+    return contactRepository;
+  };
   const checkReadiness = dependencies.readinessCheck ?? (async () => {
     try {
       const client = databaseClientFactory();
@@ -57,6 +68,7 @@ export function buildApp(
   app.addHook('onClose', async () => databaseClient?.$disconnect());
   registerErrorHandlers(app);
   app.register(healthRoutes(checkReadiness));
+  app.register(admissionsContactRoutes(contactRepositoryFactory));
   app.register(diagnosisRoutes(aiProviderFactory));
   app.register(recommendationRoutes(
     () => dependencies.universityProvider ?? createUniversityProvider(loadEnvironment(process.env)),

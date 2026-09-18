@@ -22,7 +22,8 @@
                   "CONFLICT",
                   "EXTERNAL_UNAVAILABLE",
                   "DATABASE_UNAVAILABLE",
-                  "INTERNAL"
+                  "INTERNAL",
+                  "UNIVERSITY_EMAIL_UNAVAILABLE"
                 ]
               },
               "message": {
@@ -1448,6 +1449,62 @@
         "required": [
           "engineVersion",
           "comparisons"
+        ],
+        "additionalProperties": false
+      },
+      "AdmissionsContactResponse": {
+        "type": "object",
+        "properties": {
+          "contact": {
+            "type": "object",
+            "properties": {
+              "universityId": {
+                "type": "string",
+                "minLength": 1
+              },
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "undergraduate_admissions",
+                  "international_admissions",
+                  "general_admissions"
+                ]
+              },
+              "email": {
+                "type": "string",
+                "format": "email",
+                "pattern": "^(?:[A-Za-z0-9_'+\\-]+\\.)*[A-Za-z0-9_'+\\-]*[A-Za-z0-9_+-]@(?:[A-Za-z0-9][A-Za-z0-9\\-]*\\.)+[A-Za-z]{2,}$"
+              },
+              "sourceUrl": {
+                "type": "string",
+                "format": "uri"
+              },
+              "sourceStatus": {
+                "type": "string",
+                "enum": [
+                  "official",
+                  "verified"
+                ]
+              },
+              "verifiedAt": {
+                "type": "string",
+                "format": "date-time",
+                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+              }
+            },
+            "required": [
+              "universityId",
+              "kind",
+              "email",
+              "sourceUrl",
+              "sourceStatus",
+              "verifiedAt"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "contact"
         ],
         "additionalProperties": false
       },
@@ -3209,6 +3266,75 @@
             }
           },
           "502": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Unexpected error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/universities/{universityId}/admissions-contact": {
+      "get": {
+        "operationId": "getAdmissionsContact",
+        "summary": "Get an active verified admissions contact",
+        "parameters": [
+          {
+            "name": "universityId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdmissionsContactResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
             "description": "Error",
             "content": {
               "application/json": {

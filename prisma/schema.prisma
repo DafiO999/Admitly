@@ -38,6 +38,12 @@ enum RequirementKind {
   other
 }
 
+enum UniversityContactKind {
+  undergraduate_admissions
+  international_admissions
+  general_admissions
+}
+
 enum RoadmapCategory {
   exam
   document
@@ -95,9 +101,27 @@ model University {
   createdAt            DateTime               @default(now())
   updatedAt            DateTime               @updatedAt
   requirements         AdmissionRequirement[]
+  contacts             UniversityContact[]
 
   @@index([name])
   @@index([state])
+}
+
+model UniversityContact {
+  id           String                @id @default(uuid()) @db.Uuid
+  universityId String
+  university   University            @relation(fields: [universityId], references: [id], onDelete: Cascade)
+  kind         UniversityContactKind
+  email        String
+  sourceUrl    String
+  sourceTitle  String?
+  sourceStatus SourceStatus
+  verifiedAt   DateTime
+  active       Boolean               @default(false)
+  createdAt    DateTime              @default(now())
+  updatedAt    DateTime              @updatedAt
+
+  @@index([universityId, active])
 }
 
 model AdmissionRequirement {
