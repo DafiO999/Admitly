@@ -1,10 +1,30 @@
 node_modules/
 dist/
 coverage/
+*.tsbuildinfo
+.eslintcache
+.cache/
+.pnpm-store/
+.vitest/
 /backups/
+*.dump
 /DOCS/
 .env
 .env.*
 !.env.example
 deploy/.env.production
 *.log
+
+# Local editor, OS, and assistant state.
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+Desktop.ini
+.codex/
+.openai/
+
+# Postman environments can contain local credentials.
+postman/*.postman_environment.json
