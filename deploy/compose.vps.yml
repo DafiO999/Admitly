@@ -46,6 +46,7 @@ services:
       default:
         aliases:
           - admitly-api
+      egress:
     healthcheck:
       test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3001/api/ready').then(r => { if (!r.ok) process.exitCode = 1; }).catch(() => { process.exitCode = 1; })"]
       interval: 10s
@@ -87,6 +88,8 @@ networks:
   ingress:
     external: true
     name: codex-pool-ingress
+  egress:
+    name: admitly-prod-egress
 
 volumes:
   admitly_postgres_data:
