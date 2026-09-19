@@ -18,13 +18,14 @@ import {
   LetterAlreadySentError, LetterNotReadyError, LetterSendInProgressError,
 } from '../../application/ports/letter-delivery-repository.js';
 import { MailDeliveryError, MailProviderUnavailableError } from '../../application/ports/mail-provider.js';
+import { ProfileAccessDeniedError } from '../profile-access.js';
 
 type ErrorCode = 'VALIDATION' | 'REQUEST_TOO_LARGE' | 'NOT_FOUND' | 'CONFLICT'
   | 'EXTERNAL_UNAVAILABLE' | 'DATABASE_UNAVAILABLE' | 'INTERNAL' | 'UNIVERSITY_EMAIL_UNAVAILABLE'
   | 'LETTER_NOT_FOUND' | 'LETTER_NOT_EDITABLE' | 'INVALID_REPLY_TO' | 'AI_DRAFT_GENERATION_FAILED'
   | 'UNSUPPORTED_ATTACHMENT_TYPE' | 'ATTACHMENT_TOO_LARGE' | 'LETTER_ATTACHMENT_TOTAL_LIMIT' | 'INVALID_FILE'
   | 'LETTER_NOT_READY' | 'LETTER_ALREADY_SENT' | 'LETTER_SEND_IN_PROGRESS'
-  | 'MAIL_PROVIDER_UNAVAILABLE' | 'MAIL_SEND_FAILED';
+  | 'MAIL_PROVIDER_UNAVAILABLE' | 'MAIL_SEND_FAILED' | 'UNAUTHORIZED';
 
 function errorResponse(code: ErrorCode, message: string) {
   return { error: { code, message, details: [] } };
@@ -48,6 +49,10 @@ export function registerErrorHandlers(app: FastifyInstance): void {
 
     if (statusCode === 413) {
       return send(413, 'REQUEST_TOO_LARGE', 'Request body too large');
+    }
+
+    if (error instanceof ProfileAccessDeniedError) {
+      return send(401, 'UNAUTHORIZED', 'Profile access denied');
     }
 
     if (error instanceof UniversityProviderError) {

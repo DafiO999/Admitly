@@ -18,8 +18,8 @@ describe('roadmap builder', () => {
     })));
     expect(first).toEqual(second);
     expect(first.sourceCoverage).toEqual({ official: 0, verified: 0, demo: 4, unknown: 0 });
-    expect(first.roadmap.rulesVersion).toBe('1.0.0');
-    expect(first.roadmap.nextActionId).toBe('research:programs');
+    expect(first.roadmap.rulesVersion).toBe('1.1.0');
+    expect(first.roadmap.nextActionId).toBe('academic:grade-11-focus:computer_science');
     expect(first.roadmap.items.filter((item) => item.isNextAction)).toHaveLength(1);
     const deadlines = first.roadmap.items.filter((item) => item.dueDate);
     expect(deadlines.map((item) => item.dueDate)).toEqual(['2028-01-15', '2028-02-15']);
@@ -127,5 +127,22 @@ describe('roadmap builder', () => {
     expect(withContact.progress).toEqual({ done: 0, total: withContact.items.length, percent: 0 });
     expect(buildRoadmap(canonicalDemoProfile, [schools[0]!]).roadmap.items
       .some((item) => item.category === 'university_email')).toBe(false);
+  });
+
+  it('changes the academic next action and activity when stage or field changes', () => {
+    const computerScience = buildRoadmap(canonicalDemoProfile, schools).roadmap;
+    const design = buildRoadmap({ ...canonicalDemoProfile, targetField: 'design' }, schools).roadmap;
+    const graduate = buildRoadmap({ ...canonicalDemoProfile, studentStage: 'graduated' }, schools).roadmap;
+    expect(computerScience.nextActionId).toBe('academic:grade-11-focus:computer_science');
+    expect(design.nextActionId).toBe('academic:grade-11-focus:design');
+    expect(design.items.some((item) => item.id === 'activity:design')).toBe(true);
+    expect(graduate.nextActionId).toBe('academic:records-review:computer_science');
+  });
+
+  it('promotes a material tuition gap to the next action', () => {
+    const result = buildRoadmap({ ...canonicalDemoProfile, annualBudgetUsd: 8_000 }, schools).roadmap;
+    expect(result.nextActionId).toBe('research:budget-gap');
+    expect(result.items.find((item) => item.id === 'research:budget-gap')?.description)
+      .toContain('$8,000 tuition budget');
   });
 });

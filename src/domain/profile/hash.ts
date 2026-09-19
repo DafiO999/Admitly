@@ -9,6 +9,7 @@ export function createProfileHash(input: unknown): string {
     targetDegree: profile.targetDegree,
     targetField: profile.targetField,
     targetIntakeYear: profile.targetIntakeYear,
+    studentStage: profile.studentStage,
     gpaValue: profile.gpaValue,
     gpaScale: profile.gpaScale,
     englishExam: profile.englishExam ?? null,

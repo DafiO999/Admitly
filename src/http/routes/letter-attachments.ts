@@ -4,19 +4,29 @@ import {
   AttachmentTooLargeError, InvalidFileError, type LetterAttachmentRepository,
 } from '../../application/ports/letter-attachment-repository.js';
 import type { LetterRepository } from '../../application/ports/letter-repository.js';
+import type { PlanRepository } from '../../application/ports/plan-repository.js';
 import {
   deleteLetterAttachment, listLetterAttachments, uploadLetterAttachment,
 } from '../../application/services/letter-attachments.js';
 import { apiPaths } from './paths.js';
+import { requireProfileAccess } from '../profile-access.js';
+import { z } from 'zod';
 
 export function letterAttachmentRoutes(
   letters: () => LetterRepository,
   attachments: () => LetterAttachmentRepository,
   storage: () => FileStorage,
   limits: () => { maxFileBytes: number; maxTotalBytes: number },
+  plans: () => PlanRepository,
+  accessSecret: () => string,
 ): FastifyPluginAsync {
   return async (app) => {
+    const requireLetter = async (request: Parameters<typeof requireProfileAccess>[0], letterId: string) => {
+      const profileId = await plans().findLetterProfileId(z.uuid().parse(letterId));
+      if (profileId) requireProfileAccess(request, profileId, accessSecret());
+    };
     app.post<{ Params: { letterId: string } }>(apiPaths.letterAttachments, async (request) => {
+      await requireLetter(request, request.params.letterId);
       if (!request.isMultipart()) throw new InvalidFileError();
       const bounds = limits();
       const parts = request.parts({ limits: {
@@ -52,9 +62,13 @@ export function letterAttachmentRoutes(
         throw error;
       }
     });
-    app.get<{ Params: { letterId: string } }>(apiPaths.letterAttachments, async (request) =>
-      listLetterAttachments(request.params.letterId, letters, attachments));
-    app.delete<{ Params: { letterId: string; attachmentId: string } }>(apiPaths.letterAttachment, async (request) =>
-      deleteLetterAttachment(request.params.letterId, request.params.attachmentId, letters, attachments, storage));
+    app.get<{ Params: { letterId: string } }>(apiPaths.letterAttachments, async (request) => {
+      await requireLetter(request, request.params.letterId);
+      return listLetterAttachments(request.params.letterId, letters, attachments);
+    });
+    app.delete<{ Params: { letterId: string; attachmentId: string } }>(apiPaths.letterAttachment, async (request) => {
+      await requireLetter(request, request.params.letterId);
+      return deleteLetterAttachment(request.params.letterId, request.params.attachmentId, letters, attachments, storage);
+    });
   };
 }

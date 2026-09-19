@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import type { StudentProfile, StudyField } from "@/lib/api";
-import { fields, stateNames } from "@/lib/russian";
+import { fields, selectableFields, stateNames, studentStages } from "@/lib/russian";
 
 type Props = {
   initial: StudentProfile;
@@ -13,10 +13,16 @@ type Props = {
 const pages = ["Цель", "Результаты", "Бюджет"] as const;
 
 export function Onboarding({ initial, save, busy }: Props) {
-  const [draft, setDraft] = useState<StudentProfile>(initial);
+  const [draft, setDraft] = useState<StudentProfile>(() => ({
+    ...initial, targetField: initial.targetField === "other" ? "computer_science" : initial.targetField,
+  }));
   const [step, setStep] = useState(0);
-  const [stateToAdd, setStateToAdd] = useState("");
   const update = (values: Partial<StudentProfile>) => setDraft((current) => ({ ...current, ...values }));
+  const addPreferredState = (code: string) => {
+    const current = draft.preferredStates ?? [];
+    if (!code || current.includes(code) || current.length >= 10) return;
+    update({ preferredStates: [...current, code] });
+  };
   const english = draft.englishExam ?? { type: "IELTS" as const, status: "not_planned" as const };
   const sat = draft.sat ?? { status: "not_planned" as const };
 
@@ -27,9 +33,9 @@ export function Onboarding({ initial, save, busy }: Props) {
         <h1>Что ты хочешь изучать?</h1>
         <p>Admitly подбирает программы бакалавриата в США. Направление и год начала обучения влияют на рекомендации и план.</p>
         <div className="choiceRow" role="group" aria-label="Направление обучения">
-          {Object.entries(fields).map(([key, label]) => <button type="button" key={key} className={draft.targetField === key ? "selected" : ""} aria-pressed={draft.targetField === key} onClick={() => update({ targetField: key as StudyField })}>{label}</button>)}
+          {selectableFields.map((key) => <button type="button" key={key} className={draft.targetField === key ? "selected" : ""} aria-pressed={draft.targetField === key} onClick={() => update({ targetField: key as StudyField })}>{fields[key]}</button>)}
         </div>
-        <div className="fieldGrid"><label>Год начала обучения<input type="number" min="2020" max="2100" value={draft.targetIntakeYear} onChange={(event) => update({ targetIntakeYear: Number(event.target.value) })} /></label></div>
+        <div className="fieldGrid"><label>Текущий этап<select value={draft.studentStage} onChange={(event) => update({ studentStage: event.target.value as StudentProfile["studentStage"] })}>{Object.entries(studentStages).map(([key, label]) => <option key={key} value={key}>{label}</option>)}</select></label><label>Год начала обучения<input type="number" min="2020" max="2100" value={draft.targetIntakeYear} onChange={(event) => update({ targetIntakeYear: Number(event.target.value) })} /></label></div>
       </>}
       {step === 1 && <>
         <h1>Какие у тебя результаты?</h1>
@@ -46,13 +52,14 @@ export function Onboarding({ initial, save, busy }: Props) {
       </>}
       {step === 2 && <>
         <h1>Какой бюджет тебе подходит?</h1>
-        <p>Укажи годовой бюджет в долларах США. Штаты и размер кампуса можно оставить без предпочтений.</p>
+        <p>Укажи годовой бюджет только на обучение. Проживание, питание, страховка и транспорт в него не входят.</p>
         <div className="fieldGrid">
-          <label>Годовой бюджет, USD<input type="number" min="0" step="1" value={draft.annualBudgetUsd} onChange={(event) => update({ annualBudgetUsd: Number(event.target.value) })} /></label>
+          <label>Годовой бюджет на обучение, USD<input type="number" min="0" step="1" value={draft.annualBudgetUsd} onChange={(event) => update({ annualBudgetUsd: Number(event.target.value) })} /></label>
           <label>Размер кампуса<select value={draft.campusSize ?? "any"} onChange={(event) => update({ campusSize: event.target.value as StudentProfile["campusSize"] })}><option value="any">Любой</option><option value="small">Небольшой</option><option value="medium">Средний</option><option value="large">Крупный</option></select></label>
         </div>
-        <div className="onboardStates"><label>Предпочтительный штат<select value={stateToAdd} onChange={(event) => setStateToAdd(event.target.value)}><option value="">Выберите штат</option>{Object.entries(stateNames).map(([code, name]) => <option key={code} value={code} disabled={draft.preferredStates?.includes(code)}>{name}</option>)}</select></label><button type="button" className="ghost" disabled={!stateToAdd || (draft.preferredStates?.length ?? 0) >= 10} onClick={() => { update({ preferredStates: [...(draft.preferredStates ?? []), stateToAdd] }); setStateToAdd(""); }}>Добавить</button></div>
+        <div className="onboardStates"><label>Предпочтительные штаты<select value="" onChange={(event) => addPreferredState(event.target.value)} disabled={(draft.preferredStates?.length ?? 0) >= 10}><option value="">Добавить штат…</option>{Object.entries(stateNames).map(([code, name]) => <option key={code} value={code} disabled={draft.preferredStates?.includes(code)}>{name}</option>)}</select></label></div>
         <div className="choiceRow stateChoices">{draft.preferredStates?.map((code) => <button type="button" key={code} className="selected" onClick={() => update({ preferredStates: draft.preferredStates?.filter((item) => item !== code) })}>{stateNames[code] ?? code} ×</button>)}</div>
+        <p className="preferenceHelp">Сначала покажем подходящие варианты из выбранных штатов.</p>
       </>}
     </div>
     <footer><button type="button" className="back" disabled={step === 0} onClick={() => setStep(step - 1)}>Назад</button><button type="button" className="primary" disabled={busy} onClick={() => step === pages.length - 1 ? void save(draft) : setStep(step + 1)}>{busy ? "Сохраняем…" : step === pages.length - 1 ? "Показать университеты →" : "Продолжить →"}</button></footer>

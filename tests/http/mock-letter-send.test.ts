@@ -5,10 +5,12 @@ import type { LetterDraftProvider } from '../../src/application/ports/letter-dra
 import type { PersistedPlan, PlanRepository } from '../../src/application/ports/plan-repository.js';
 import { letterDraftSentenceBank } from '../../src/domain/letter/draft-guard.js';
 import { canonicalDemoProfile, demoUniversities } from '../../src/infrastructure/demo/fixtures.js';
+import { createProfileAccessToken } from '../../src/http/profile-access.js';
 
 describe('mock letter send', () => {
   it('simulates a send without a contact, draft provider, or mail transport', async () => {
     const profileId = randomUUID();
+    const accessHeaders = { 'x-admitly-access-key': createProfileAccessToken(profileId, 'admitly-local-profile-access-secret') };
     const university = demoUniversities[0]!;
     const universityId = university.id;
     let mailCalls = 0;
@@ -25,6 +27,8 @@ describe('mock letter send', () => {
       findCurrent: async (id) => id === profileId ? plan : null,
       saveGenerated: async () => { throw new Error('saveGenerated must not run'); },
       updateItemStatus: async () => { throw new Error('updateItemStatus must not run'); },
+      findRoadmapProfileId: async () => null,
+      findLetterProfileId: async () => null,
     };
     const drafts: LetterDraftProvider = { generateLetterDrafts: async (input) => {
       const bank = letterDraftSentenceBank(input);
@@ -49,7 +53,7 @@ describe('mock letter send', () => {
         .toEqual({ mode: 'mock' });
       const prepared = await app.inject({ method: 'POST', url: '/api/letters/mock-drafts', payload: {
         profileId, universityId, senderName: 'Alex Student', purpose: 'admissions_inquiry',
-      } });
+      }, headers: accessHeaders });
       expect(prepared.statusCode, prepared.body).toBe(200);
       expect(prepared.json().variants).toHaveLength(3);
       expect(prepared.json().variants.map((variant: { variant: string }) => variant.variant))
@@ -58,18 +62,18 @@ describe('mock letter send', () => {
         /^[0-9a-f-]{36}$/.test(variant.id))).toBe(true);
       const body = { profileId, universityId, senderName: 'Alex Student',
         subject: 'Admission question', body: 'Could you tell me about the program?' };
-      const result = await app.inject({ method: 'POST', url: '/api/letters/mock-send', payload: body });
+      const result = await app.inject({ method: 'POST', url: '/api/letters/mock-send', payload: body, headers: accessHeaders });
       expect(result.statusCode, result.body).toBe(200);
       expect(result.json()).toMatchObject({ status: 'simulated', universityId,
         universityName: university.name, subject: body.subject });
       expect(result.json().simulationId).toMatch(/^[0-9a-f-]{36}$/);
       expect(mailCalls).toBe(0);
       expect((await app.inject({ method: 'POST', url: '/api/letters/mock-send',
-        payload: { ...body, subject: '' } })).statusCode).toBe(400);
+        payload: { ...body, subject: '' }, headers: accessHeaders })).statusCode).toBe(400);
       expect((await app.inject({ method: 'POST', url: '/api/letters/mock-send',
-        payload: { ...body, universityId: 'missing' } })).statusCode).toBe(404);
+        payload: { ...body, universityId: 'missing' }, headers: accessHeaders })).statusCode).toBe(404);
       expect((await app.inject({ method: 'POST', url: '/api/letters/mock-send',
-        payload: { ...body, profileId: randomUUID() } })).statusCode).toBe(404);
+        payload: { ...body, profileId: randomUUID() }, headers: accessHeaders })).statusCode).toBe(401);
       const blockedRealSend = await app.inject({ method: 'POST',
         url: `/api/letters/${randomUUID()}/send`, headers: { 'idempotency-key': 'test' } });
       expect(blockedRealSend.json().error.code).toBe('MAIL_PROVIDER_UNAVAILABLE');

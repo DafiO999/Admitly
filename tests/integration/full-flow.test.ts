@@ -5,6 +5,7 @@ import { createPrismaClient } from '../../src/infrastructure/db/prisma/client.js
 import { PrismaPlanRepository } from '../../src/infrastructure/db/repositories/prisma-plan-repository.js';
 import { canonicalDemoProfile } from '../../src/infrastructure/demo/fixtures.js';
 import { getTestDatabaseUrl } from './test-database-url.js';
+import { createProfileAccessToken } from '../../src/http/profile-access.js';
 
 const databaseUrl = getTestDatabaseUrl(process.env);
 
@@ -16,6 +17,9 @@ describe('complete demo admission flow', () => {
     const profileId = randomUUID();
     const profile = { ...canonicalDemoProfile, id: profileId };
     const app = buildApp({}, { planRepository: new PrismaPlanRepository(client), aiProvider: null });
+    app.addHook('onRequest', async (request) => {
+      request.headers['x-admitly-access-key'] = createProfileAccessToken(profileId, 'admitly-local-profile-access-secret');
+    });
     const request = async (method: 'POST' | 'PUT' | 'PATCH' | 'GET', url: string, payload?: unknown) => {
       const response = await app.inject({ method, url, ...(payload ? { payload } : {}) });
       expect(response.statusCode, `${method} ${url}: ${response.body}`).toBe(200);

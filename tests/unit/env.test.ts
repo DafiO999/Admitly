@@ -42,9 +42,10 @@ describe('environment configuration', () => {
       .toThrow('DATABASE_URL');
     expect(() => loadEnvironment({ NODE_ENV: 'production', DATABASE_URL: 'postgresql://localhost/admitly',
       LETTER_UPLOAD_DIR: 'relative/uploads' })).toThrow('LETTER_UPLOAD_DIR');
-    expect(loadEnvironment({ NODE_ENV: 'production', DATABASE_URL: 'postgresql://localhost/admitly' }))
+    expect(loadEnvironment({ NODE_ENV: 'production', DATABASE_URL: 'postgresql://localhost/admitly',
+      PROFILE_ACCESS_SECRET: 'a-secure-profile-access-secret-value' }))
       .toMatchObject({ MAIL_DELIVERY_MODE: 'mock' });
     expect(() => loadEnvironment({ NODE_ENV: 'production', DATABASE_URL: 'postgresql://localhost/admitly',
-      MAIL_DELIVERY_MODE: 'smtp' })).toThrow('SMTP_HOST');
+      PROFILE_ACCESS_SECRET: 'a-secure-profile-access-secret-value', MAIL_DELIVERY_MODE: 'smtp' })).toThrow('SMTP_HOST');
   });
 });

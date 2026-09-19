@@ -10,6 +10,34 @@ export interface RoadmapUniversity {
   admissionsContact?: { email: string; sourceUrl: string; sourceStatus: 'official' | 'verified' };
 }
 
+const stageTasks: Record<StudentProfile['studentStage'], { id: string; title: string; description: string; priority: number }> = {
+  grade_9_10: {
+    id: 'academic:course-plan', title: 'Plan courses for the next school year',
+    description: 'Choose courses that support your target field and keep your academic record strong.', priority: 90,
+  },
+  grade_11: {
+    id: 'academic:grade-11-focus', title: 'Strengthen your grade 11 academic record',
+    description: 'Review current grades and focus on subjects connected with your target field.', priority: 90,
+  },
+  grade_12: {
+    id: 'academic:final-year-records', title: 'Keep final-year grades and records ready',
+    description: 'Track final-year grades and confirm when updated academic records will be available.', priority: 90,
+  },
+  graduated: {
+    id: 'academic:records-review', title: 'Review your completed academic records',
+    description: 'Check that your completed transcript is accurate and ready for application use.', priority: 90,
+  },
+};
+
+const fieldActivities: Record<StudentProfile['targetField'], { title: string; description: string }> = {
+  computer_science: { title: 'Complete a small software project', description: 'Create or improve a project that demonstrates your interest in computer science.' },
+  engineering: { title: 'Document an engineering project', description: 'Prepare a short description of a design, experiment, or engineering project.' },
+  business: { title: 'Analyze a real business case', description: 'Choose a business problem and write a short evidence-based analysis.' },
+  economics: { title: 'Complete an economics analysis', description: 'Use public data to explain one economic question related to your interests.' },
+  design: { title: 'Prepare a focused design portfolio', description: 'Select and explain several works that show your design process and decisions.' },
+  other: { title: 'Document a field-related project', description: 'Prepare one concrete project that demonstrates sustained interest in your chosen field.' },
+};
+
 function relevantRequirement(
   requirement: AdmissionRequirement, university: University, profile: StudentProfile,
 ): boolean {
@@ -88,14 +116,38 @@ export function buildRoadmap(
   });
   add({
     id: 'research:budget', title: 'Review your application budget', category: 'research',
-    description: 'Check total costs directly with each university before committing.',
+    description: 'Compare tuition with your tuition budget, then check housing and other costs separately.',
     priority: 40, dependsOnIds: [],
   });
+  const stageTask = stageTasks[profile.studentStage];
+  const stageTaskId = `${stageTask.id}:${profile.targetField}`;
+  add({ ...stageTask, id: stageTaskId, category: 'academic', dependsOnIds: [] });
+  const activity = fieldActivities[profile.targetField];
+  add({
+    id: `activity:${profile.targetField}`, title: activity.title, category: 'activity',
+    description: activity.description, priority: 65, dependsOnIds: [stageTaskId],
+  });
+  const knownTuition = schools.flatMap(({ university }) =>
+    university.tuitionOutOfStateUsd === undefined ? [] : [university.tuitionOutOfStateUsd]);
+  const minimumTuition = knownTuition.length ? Math.min(...knownTuition) : undefined;
+  if (profile.annualBudgetUsd < 25_000) {
+    const hasMaterialGap = minimumTuition !== undefined && minimumTuition > profile.annualBudgetUsd
+      && minimumTuition - profile.annualBudgetUsd >= 5_000;
+    add({
+      id: hasMaterialGap ? 'research:budget-gap' : 'research:budget-limit',
+      title: hasMaterialGap ? 'Resolve the tuition budget gap' : 'Verify your tuition budget assumptions',
+      category: 'research',
+      description: hasMaterialGap
+        ? `The lowest reported annual tuition in the current shortlist is $${minimumTuition!.toLocaleString('en-US')}, above your $${profile.annualBudgetUsd.toLocaleString('en-US')} tuition budget. Review more affordable options and funding before continuing.`
+        : `Your annual tuition budget is $${profile.annualBudgetUsd.toLocaleString('en-US')}. Confirm tuition for international students and plan housing, insurance, food, and transport separately.`,
+      priority: 130, dependsOnIds: [],
+    });
+  }
   if (profile.englishExam?.status !== 'taken') {
     add({
       id: 'exam:english', title: 'Plan an English-language exam', category: 'exam',
       description: 'Choose or complete an exam and record the result in your profile.',
-      priority: 75, dependsOnIds: [],
+      priority: 120, dependsOnIds: [],
     });
   }
   if (profile.sat?.status === 'planned') {

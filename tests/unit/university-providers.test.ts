@@ -152,7 +152,9 @@ describe('university providers', () => {
     const live = createUniversityProvider(
       { DEMO_DATA_MODE: false, COLLEGE_SCORECARD_API_KEY: 'private-key' }, { fetcher: failingFetch },
     );
-    await expect(live.search({ field: 'computer_science' })).rejects.toMatchObject({ code: 'UNAVAILABLE' });
+    const fallback = await live.search({ field: 'computer_science' });
+    expect(fallback.length).toBeGreaterThanOrEqual(3);
+    expect(fallback.every((university) => university.sourceStatus === 'demo')).toBe(true);
     const demo = createUniversityProvider(
       { DEMO_DATA_MODE: true, COLLEGE_SCORECARD_API_KEY: 'private-key' }, { fetcher: failingFetch },
     );

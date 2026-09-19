@@ -11,6 +11,9 @@ export type GpaScale = z.infer<typeof gpaScaleSchema>;
 export const examStatusSchema = z.enum(['not_planned', 'planned', 'taken']);
 export type ExamStatus = z.infer<typeof examStatusSchema>;
 
+export const studentStageSchema = z.enum(['grade_9_10', 'grade_11', 'grade_12', 'graduated']);
+export type StudentStage = z.infer<typeof studentStageSchema>;
+
 const englishExamSchema = z.object({
   type: z.enum(['IELTS', 'TOEFL', 'DUOLINGO']),
   status: examStatusSchema,
@@ -48,6 +51,7 @@ export const studentProfileSchema = z.object({
   targetDegree: z.literal('bachelor'),
   targetField: studyFieldSchema,
   targetIntakeYear: z.number().int().min(2020).max(2100),
+  studentStage: studentStageSchema.default('grade_11'),
   gpaValue: z.number().finite().min(0),
   gpaScale: gpaScaleSchema,
   englishExam: englishExamSchema.optional(),

@@ -35,7 +35,7 @@ const errorSchema = z.object({
       'LETTER_NOT_FOUND', 'LETTER_NOT_EDITABLE', 'INVALID_REPLY_TO', 'AI_DRAFT_GENERATION_FAILED',
       'UNSUPPORTED_ATTACHMENT_TYPE', 'ATTACHMENT_TOO_LARGE', 'LETTER_ATTACHMENT_TOTAL_LIMIT', 'INVALID_FILE',
       'LETTER_NOT_READY', 'LETTER_ALREADY_SENT', 'LETTER_SEND_IN_PROGRESS',
-      'MAIL_PROVIDER_UNAVAILABLE', 'MAIL_SEND_FAILED']),
+      'MAIL_PROVIDER_UNAVAILABLE', 'MAIL_SEND_FAILED', 'UNAUTHORIZED']),
     message: z.string(),
     details: z.array(z.unknown()),
   }).strict(),
@@ -158,6 +158,7 @@ const schemas = {
   RecalculateRequest: recalculateRequestSchema,
   StatusRequest: statusRequestSchema,
   PersistedPlanResponse: persistedPlanSchema,
+  CreatedPlanResponse: persistedPlanSchema.safeExtend({ accessToken: z.string().min(32).max(128) }),
   UpdateRoadmapItemResponse: z.object({ roadmap: persistedRoadmapSchema }).strict(),
 };
 
@@ -189,6 +190,10 @@ function operation(
   };
 }
 
+function secured<T extends object>(operation: T): T & { security: { ProfileAccessKey: never[] }[] } {
+  return { ...operation, security: [{ ProfileAccessKey: [] }] };
+}
+
 const path = (route: string) => route.replace(/:([A-Za-z][A-Za-z0-9]*)/g, '{$1}');
 
 export function generateOpenApiDocument() {
@@ -196,7 +201,10 @@ export function generateOpenApiDocument() {
     openapi: '3.1.0',
     info: { title: 'Admitly backend API', version: '1.0.0',
       description: 'Fit scores describe profile match, not admission probability. Demo source data is fictional.' },
-    components: { schemas: Object.fromEntries(Object.entries(schemas).map(([name, schema]) => [name, json(schema)])) },
+    components: {
+      schemas: Object.fromEntries(Object.entries(schemas).map(([name, schema]) => [name, json(schema)])),
+      securitySchemes: { ProfileAccessKey: { type: 'apiKey', in: 'header', name: 'X-Admitly-Access-Key' } },
+    },
     paths: {
       [path(apiPaths.health)]: { get: operation('getHealth', 'Liveness', 'HealthResponse') },
       [path(apiPaths.ready)]: { get: operation('getReady', 'Database readiness',
@@ -214,61 +222,61 @@ export function generateOpenApiDocument() {
         undefined, ['universityId'], [400, 404, 503]) },
       [path(apiPaths.letterDeliveryMode)]: { get: operation('getLetterDeliveryMode',
         'Get the configured letter delivery mode', 'LetterDeliveryModeResponse') },
-      [path(apiPaths.mockLetterDrafts)]: { post: operation('prepareMockLetterDrafts',
+      [path(apiPaths.mockLetterDrafts)]: { post: secured(operation('prepareMockLetterDrafts',
         'Generate three grounded Gemini letter variants without persisting a message',
-        'MockLetterDraftsResponse', 'MockLetterDraftsRequest', [], [400, 404, 413, 422, 502, 503]) },
-      [path(apiPaths.mockLetterSend)]: { post: operation('simulateLetterSend',
+        'MockLetterDraftsResponse', 'MockLetterDraftsRequest', [], [400, 401, 404, 413, 422, 502, 503])) },
+      [path(apiPaths.mockLetterSend)]: { post: secured(operation('simulateLetterSend',
         'Simulate a letter send without delivering or persisting a message',
-        'MockLetterSendResponse', 'MockLetterSendRequest', [], [400, 404, 413, 503]) },
-      [path(apiPaths.createLetter)]: { post: operation('createAdmissionLetter',
+        'MockLetterSendResponse', 'MockLetterSendRequest', [], [400, 401, 404, 413, 503])) },
+      [path(apiPaths.createLetter)]: { post: secured(operation('createAdmissionLetter',
         'Create an admission letter', 'CreateLetterResponse', 'CreateLetterRequest',
-        ['universityId'], [400, 404, 413, 503]) },
-      [path(apiPaths.letterDrafts)]: { post: operation('generateAdmissionLetterDrafts',
+        ['universityId'], [400, 401, 404, 413, 503])) },
+      [path(apiPaths.letterDrafts)]: { post: secured(operation('generateAdmissionLetterDrafts',
         'Generate three grounded letter drafts', 'LetterDraftsResponse', 'LetterDraftsRequest',
-        ['letterId'], [400, 404, 409, 413, 502, 503]) },
-      [path(apiPaths.letterContent)]: { put: operation('selectAdmissionLetterContent',
+        ['letterId'], [400, 401, 404, 409, 413, 502, 503])) },
+      [path(apiPaths.letterContent)]: { put: secured(operation('selectAdmissionLetterContent',
         'Select and edit final letter content', 'LetterContentResponse', 'LetterContentRequest',
-        ['letterId'], [400, 404, 409, 413, 503]) },
+        ['letterId'], [400, 401, 404, 409, 413, 503])) },
       [path(apiPaths.letterAttachments)]: {
         post: {
-          ...operation('uploadLetterAttachment', 'Upload one private letter attachment',
-            'AttachmentUploadResponse', undefined, ['letterId'], [400, 404, 409, 413, 415, 503]),
+          ...secured(operation('uploadLetterAttachment', 'Upload one private letter attachment',
+            'AttachmentUploadResponse', undefined, ['letterId'], [400, 401, 404, 409, 413, 415, 503])),
           requestBody: { required: true, content: { 'multipart/form-data': { schema: {
             type: 'object', required: ['file'], properties: { file: { type: 'string', format: 'binary' } },
           } } } },
         },
-        get: operation('listLetterAttachments', 'List letter attachment metadata',
-          'AttachmentListResponse', undefined, ['letterId'], [400, 404, 503]),
+        get: secured(operation('listLetterAttachments', 'List letter attachment metadata',
+          'AttachmentListResponse', undefined, ['letterId'], [400, 401, 404, 503])),
       },
-      [path(apiPaths.letterAttachment)]: { delete: operation('deleteLetterAttachment',
+      [path(apiPaths.letterAttachment)]: { delete: secured(operation('deleteLetterAttachment',
         'Delete one private letter attachment', 'AttachmentDeleteResponse', undefined,
-        ['letterId', 'attachmentId'], [400, 404, 409, 503]) },
-      [path(apiPaths.letterPrepare)]: { post: operation('prepareAdmissionLetter',
+        ['letterId', 'attachmentId'], [400, 401, 404, 409, 503])) },
+      [path(apiPaths.letterPrepare)]: { post: secured(operation('prepareAdmissionLetter',
         'Validate and prepare an admission letter for sending', 'LetterPrepareResponse', undefined,
-        ['letterId'], [400, 404, 409, 503]) },
+        ['letterId'], [400, 401, 404, 409, 503])) },
       [path(apiPaths.letterSend)]: { post: {
-        ...operation('sendAdmissionLetter', 'Send a prepared admission letter',
-          'LetterSendResponse', undefined, ['letterId'], [400, 404, 409, 502, 503]),
+        ...secured(operation('sendAdmissionLetter', 'Send a prepared admission letter',
+          'LetterSendResponse', undefined, ['letterId'], [400, 401, 404, 409, 502, 503])),
         parameters: [
           { name: 'letterId', in: 'path', required: true, schema: json(z.uuid()) },
           { name: 'Idempotency-Key', in: 'header', required: true,
             schema: { type: 'string', minLength: 1, maxLength: 128 } },
         ],
       } },
-      [path(apiPaths.letter)]: { get: operation('getAdmissionLetter',
+      [path(apiPaths.letter)]: { get: secured(operation('getAdmissionLetter',
         'Get letter content, attachment metadata and delivery state', 'LetterDetailResponse', undefined,
-        ['letterId'], [400, 404, 503]) },
+        ['letterId'], [400, 401, 404, 503])) },
       [path(apiPaths.roadmap)]: { post: operation('createRoadmap', 'Build a roadmap',
         'RoadmapResponse', 'RoadmapRequest', [], [400, 404, 413, 422, 502, 503]) },
       [path(apiPaths.profile)]: { put: operation('saveProfile', 'Save a profile and plan',
-        'PersistedPlanResponse', 'SaveProfileRequest', [], [400, 413, 502, 503]) },
-      [path(apiPaths.plan)]: { get: operation('getPlan', 'Read the current saved plan',
-        'PersistedPlanResponse', undefined, ['profileId'], [400, 404, 503]) },
-      [path(apiPaths.recalculate)]: { post: operation('recalculatePlan', 'Recalculate a saved plan',
-        'PersistedPlanResponse', 'RecalculateRequest', [], [400, 404, 409, 413, 502, 503]) },
-      [path(apiPaths.roadmapItem)]: { patch: operation('updateRoadmapItem', 'Update one roadmap item status',
+        'CreatedPlanResponse', 'SaveProfileRequest', [], [400, 413, 502, 503]) },
+      [path(apiPaths.plan)]: { get: secured(operation('getPlan', 'Read the current saved plan',
+        'CreatedPlanResponse', undefined, ['profileId'], [400, 401, 404, 503])) },
+      [path(apiPaths.recalculate)]: { post: secured(operation('recalculatePlan', 'Recalculate a saved plan',
+        'CreatedPlanResponse', 'RecalculateRequest', [], [400, 401, 404, 409, 413, 502, 503])) },
+      [path(apiPaths.roadmapItem)]: { patch: secured(operation('updateRoadmapItem', 'Update one roadmap item status',
         'UpdateRoadmapItemResponse', 'StatusRequest',
-        ['roadmapId', 'itemId'], [400, 404, 413, 503]) },
+        ['roadmapId', 'itemId'], [400, 401, 404, 413, 503])) },
     },
   };
 }

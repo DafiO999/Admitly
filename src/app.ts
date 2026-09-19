@@ -13,7 +13,7 @@ import { MailProviderUnavailableError } from './application/ports/mail-provider.
 import type { AdmissionRequirementProvider } from './application/ports/admission-requirement-provider.js';
 import type { AiProvider } from './application/ports/ai-provider.js';
 import { DatabaseUnavailableError, type PlanRepository } from './application/ports/plan-repository.js';
-import { loadEnvironment } from './config/env.js';
+import { loadEnvironment, profileAccessSecret } from './config/env.js';
 import { registerErrorHandlers } from './http/errors/handler.js';
 import { comparisonRoutes } from './http/routes/comparison.js';
 import { admissionsContactRoutes } from './http/routes/admissions-contact.js';
@@ -128,6 +128,7 @@ export function buildApp(
   };
   const mailDeliveryModeFactory = () =>
     dependencies.mailDeliveryMode ?? loadEnvironment(process.env).MAIL_DELIVERY_MODE;
+  const accessSecretFactory = () => profileAccessSecret(loadEnvironment(process.env));
   const fileStorageFactory = () => {
     if (dependencies.fileStorage) return dependencies.fileStorage;
     if (fileStorage) return fileStorage;
@@ -157,13 +158,15 @@ export function buildApp(
   app.register(multipart);
   app.register(healthRoutes(checkReadiness));
   app.register(admissionsContactRoutes(contactRepositoryFactory));
-  app.register(letterRoutes(contactRepositoryFactory, letterRepositoryFactory, letterDraftProviderFactory));
+  app.register(letterRoutes(contactRepositoryFactory, letterRepositoryFactory, letterDraftProviderFactory,
+    planRepositoryFactory, accessSecretFactory));
   app.register(letterAttachmentRoutes(letterRepositoryFactory, attachmentRepositoryFactory,
-    fileStorageFactory, attachmentLimitsFactory));
+    fileStorageFactory, attachmentLimitsFactory, planRepositoryFactory, accessSecretFactory));
   app.register(letterDeliveryRoutes(contactRepositoryFactory, deliveryRepositoryFactory,
-    fileStorageFactory, mailProviderFactory, attachmentLimitsFactory, mailDeliveryModeFactory));
+    fileStorageFactory, mailProviderFactory, attachmentLimitsFactory, mailDeliveryModeFactory,
+    planRepositoryFactory, accessSecretFactory));
   app.register(mockLetterSendRoutes(
-    planRepositoryFactory, mailDeliveryModeFactory, letterDraftProviderFactory,
+    planRepositoryFactory, mailDeliveryModeFactory, letterDraftProviderFactory, accessSecretFactory,
   ));
   app.register(diagnosisRoutes(aiProviderFactory));
   app.register(recommendationRoutes(
@@ -182,6 +185,7 @@ export function buildApp(
   };
   app.register(comparisonRoutes(providerFactory));
   app.register(roadmapRoutes(providerFactory, aiProviderFactory, optionalRoadmapContacts));
-  app.register(planPersistenceRoutes(providerFactory, planRepositoryFactory, optionalRoadmapContacts));
+  app.register(planPersistenceRoutes(providerFactory, planRepositoryFactory, optionalRoadmapContacts,
+    accessSecretFactory));
   return app;
 }

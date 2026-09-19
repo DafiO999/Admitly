@@ -4,6 +4,10 @@ export const fields: Record<StudyField, string> = {
   computer_science: "Компьютерные науки", engineering: "Инженерия", business: "Бизнес",
   economics: "Экономика", design: "Дизайн", other: "Другое направление",
 };
+export const selectableFields = (Object.keys(fields) as StudyField[]).filter((field) => field !== "other");
+export const studentStages: Record<StudentProfile["studentStage"], string> = {
+  grade_9_10: "9–10 класс", grade_11: "11 класс", grade_12: "12 класс", graduated: "Школа окончена",
+};
 export const statuses = {
   pending: "Не начато", in_progress: "В работе", done: "Готово", blocked: "Нужна помощь",
 } as const;
@@ -52,7 +56,7 @@ export function concernText(code: string): string {
 export function diagnosisLines(profile: StudentProfile, diagnosis: Diagnosis) {
   const normalized = Math.round(profile.gpaValue / profile.gpaScale * 4 * 100) / 100;
   return {
-    summary: `Цель: бакалавриат по направлению «${fields[profile.targetField]}» в США, начало обучения — ${profile.targetIntakeYear} год.`,
+    summary: `Сейчас: ${studentStages[profile.studentStage].toLowerCase()}. Цель: бакалавриат по направлению «${fields[profile.targetField]}» в США, начало обучения — ${profile.targetIntakeYear} год.`,
     strengths: diagnosis.strengths.map((line) => line.includes("GPA")
       ? `Средний балл соответствует хорошему ориентиру: ${normalized} из 4.`
       : line.includes("SAT")
@@ -80,10 +84,32 @@ export function roadmapTitle(item: RoadmapItem, universities: University[]): str
     "research:programs": "Проверить выбранные программы бакалавриата",
     "document:academic-records": "Подготовить документы об образовании",
     "research:budget": "Проверить бюджет поступления",
+    "research:budget-gap": "Найти варианты в пределах бюджета на обучение",
+    "research:budget-limit": "Проверить расходы сверх бюджета на обучение",
+    "academic:course-plan": "Спланировать предметы на следующий учебный год",
+    "academic:grade-11-focus": "Укрепить академические результаты в 11 классе",
+    "academic:final-year-records": "Подготовить оценки и документы выпускного класса",
+    "academic:records-review": "Проверить готовые документы об образовании",
     "exam:english": "Запланировать экзамен по английскому языку",
     "exam:sat": "Сдать запланированный SAT",
   };
   if (fixed[item.id]) return fixed[item.id];
+  const stageField = (Object.keys(fields) as StudyField[]).find((field) => item.id.endsWith(`:${field}`));
+  if (item.id.startsWith("academic:course-plan:")) return `Спланировать предметы по направлению «${fields[stageField ?? "other"]}»`;
+  if (item.id.startsWith("academic:grade-11-focus:")) return `Укрепить результаты для направления «${fields[stageField ?? "other"]}»`;
+  if (item.id.startsWith("academic:final-year-records:")) return `Подготовить выпускные документы для направления «${fields[stageField ?? "other"]}»`;
+  if (item.id.startsWith("academic:records-review:")) return `Проверить документы для направления «${fields[stageField ?? "other"]}»`;
+  if (item.id.startsWith("activity:")) {
+    const field = item.id.slice("activity:".length) as StudyField;
+    return ({
+      computer_science: "Сделать небольшой программный проект",
+      engineering: "Описать инженерный проект",
+      business: "Разобрать практический бизнес-кейс",
+      economics: "Подготовить экономический анализ",
+      design: "Собрать профильное дизайн-портфолио",
+      other: "Подготовить профильный проект",
+    })[field] ?? "Подготовить профильный проект";
+  }
   const university = universities.find((u) => item.id.startsWith(`school:${u.id}:`));
   if (!university) return {
     exam: "Проверить экзамены", document: "Подготовить документы", application: "Подготовить заявку",

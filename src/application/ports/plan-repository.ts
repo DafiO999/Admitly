@@ -42,6 +42,8 @@ export interface PlanRepository {
   saveGenerated(plan: GeneratedPlan): Promise<PersistedPlan>;
   findCurrent(profileId: string): Promise<PersistedPlan | null>;
   updateItemStatus(roadmapId: string, itemKey: string, status: RoadmapStatus): Promise<PersistedRoadmap | null>;
+  findRoadmapProfileId(roadmapId: string): Promise<string | null>;
+  findLetterProfileId(letterId: string): Promise<string | null>;
 }
 
 export class DatabaseUnavailableError extends Error {

@@ -32,6 +32,7 @@ const environmentSchema = z.object({
   GEMINI_MODEL: optionalString,
   GEMINI_LETTER_MODEL: optionalString,
   COLLEGE_SCORECARD_API_KEY: optionalString,
+  PROFILE_ACCESS_SECRET: optionalString,
   MAIL_DELIVERY_MODE: z.enum(['mock', 'smtp']).default('mock'),
   SMTP_HOST: optionalSmtpText,
   SMTP_PORT: z.coerce.number().int().min(1).max(65535).default(587),
@@ -76,6 +77,12 @@ const environmentSchema = z.object({
       message: 'COLLEGE_SCORECARD_API_KEY is required when DEMO_DATA_MODE=false',
     });
   }
+  if (value.NODE_ENV === 'production' && (!value.PROFILE_ACCESS_SECRET || value.PROFILE_ACCESS_SECRET.length < 32)) {
+    context.addIssue({
+      code: 'custom', path: ['PROFILE_ACCESS_SECRET'],
+      message: 'PROFILE_ACCESS_SECRET with at least 32 characters is required in production',
+    });
+  }
 });
 
 export type Environment = z.infer<typeof environmentSchema>;
@@ -94,4 +101,8 @@ export function loadEnvironment(values: NodeJS.ProcessEnv): Environment {
     throw new ConfigurationError(fields);
   }
   return result.data;
+}
+
+export function profileAccessSecret(environment: Pick<Environment, 'NODE_ENV' | 'PROFILE_ACCESS_SECRET'>): string {
+  return environment.PROFILE_ACCESS_SECRET ?? 'admitly-local-profile-access-secret';
 }

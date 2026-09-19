@@ -2,12 +2,12 @@
 
 import { useCallback, useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
 import {
-  api, defaultProfile, RECOMMENDATION_ENGINE_VERSION, type Comparison, type Diagnosis, type Plan, type Recommendation,
+  api, defaultProfile, requirePlan, RECOMMENDATION_ENGINE_VERSION, type ApiError, type Comparison, type Diagnosis, type Plan, type Recommendation,
   type RoadmapStatus, type StudentProfile, type StudyField,
 } from "@/lib/api";
 import {
   componentNames, concernText, date, diagnosisLines, fields, money, place, programName,
-  requirementNames, roadmapTitle, scoreSummary, stateNames, statuses, visibleProgramFields,
+  requirementNames, roadmapTitle, scoreSummary, selectableFields, stateNames, statuses, studentStages, visibleProgramFields,
 } from "@/lib/russian";
 import { universityImage } from "@/lib/images";
 import { CinematicHero } from "@/components/hero/cinematic-hero";
@@ -15,6 +15,7 @@ import { Onboarding } from "@/components/onboarding";
 import { LetterComposer } from "@/components/letter-composer";
 
 const PROFILE_KEY = "admitly.profileId";
+const ACCESS_KEY = "admitly.accessToken";
 const THEME_KEY = "admitly.theme";
 const stateOptions = Object.entries(stateNames);
 
@@ -22,7 +23,7 @@ function readPath() { return typeof window === "undefined" ? "/" : window.locati
 function profileError(profile: StudentProfile): string | null {
   if (!Number.isInteger(profile.targetIntakeYear) || profile.targetIntakeYear < 2020 || profile.targetIntakeYear > 2100) return "Укажите год начала обучения от 2020 до 2100.";
   if (!Number.isFinite(profile.gpaValue) || profile.gpaValue < 0 || profile.gpaValue > profile.gpaScale) return "Средний балл должен быть в пределах выбранной шкалы.";
-  if (!Number.isInteger(profile.annualBudgetUsd) || profile.annualBudgetUsd < 0) return "Укажите годовой бюджет в долларах США.";
+  if (!Number.isInteger(profile.annualBudgetUsd) || profile.annualBudgetUsd < 0) return "Укажите годовой бюджет на обучение в долларах США.";
   const exam = profile.englishExam;
   const max = exam?.type === "IELTS" ? 9 : exam?.type === "TOEFL" ? 120 : 160;
   const min = exam?.type === "DUOLINGO" ? 10 : 0;
@@ -60,17 +61,24 @@ export function ProductApp() {
       const savedId = id;
       async function loadPlan() {
         try {
-          let value = await api<Plan>(`/plan/${encodeURIComponent(savedId)}`);
+          let value = requirePlan(await api<unknown>(`/plan/${encodeURIComponent(savedId)}`));
           if (cancelled) return;
           if (value.recommendationRun.engineVersion !== RECOMMENDATION_ENGINE_VERSION) {
             try {
-              value = await api<Plan>("/plan/recalculate", "POST", { profile: value.profile });
+              value = requirePlan(await api<unknown>("/plan/recalculate", "POST", { profile: value.profile }));
             } catch (reason) {
               if (!cancelled) setError(`Не удалось обновить сохранённый подбор: ${(reason as Error).message}`);
             }
           }
           if (!cancelled) { setPlan(value); setProfile(value.profile); void loadDiagnosis(value.profile); }
-        } catch (reason) { if (!cancelled) setError((reason as Error).message); }
+        } catch (reason) {
+          if (!cancelled) {
+            if ((reason as ApiError).code === "UNAUTHORIZED") {
+              localStorage.removeItem(PROFILE_KEY); localStorage.removeItem(ACCESS_KEY);
+            }
+            setError((reason as Error).message);
+          }
+        }
         finally { if (!cancelled) setLoading(false); }
       }
       void loadPlan();
@@ -88,9 +96,10 @@ export function ProductApp() {
     if (issue) { setError(issue); return; }
     setBusy(true); setError("");
     try {
-      const saved = plan?.profile.id
-        ? await api<Plan>("/plan/recalculate", "POST", { profile: { ...next, id: plan.profile.id } })
-        : await api<Plan>("/profile", "PUT", { profile: next });
+      const saved = requirePlan(plan?.profile.id
+        ? await api<unknown>("/plan/recalculate", "POST", { profile: { ...next, id: plan.profile.id } })
+        : await api<unknown>("/profile", "PUT", { profile: next }));
+      if (saved.accessToken) localStorage.setItem(ACCESS_KEY, saved.accessToken);
       localStorage.setItem(PROFILE_KEY, saved.profile.id);
       setPlan(saved); setProfile(saved.profile); setCompareIds([]); setComparison(null);
       void loadDiagnosis(saved.profile);
@@ -102,7 +111,7 @@ export function ProductApp() {
     if (!plan) return;
     setBusy(true); setError("");
     try {
-      const updated = await api<Plan>("/plan/recalculate", "POST", { profile: plan.profile });
+      const updated = requirePlan(await api<unknown>("/plan/recalculate", "POST", { profile: plan.profile }));
       setPlan(updated); setProfile(updated.profile); setCompareIds([]); setComparison(null);
       void loadDiagnosis(updated.profile);
     } catch (reason) { setError((reason as Error).message); }
@@ -148,12 +157,12 @@ export function ProductApp() {
       <div className="topRight"><button className="themeButton" onClick={() => { const next = theme === "dark" ? "light" : "dark"; setTheme(next); document.documentElement.dataset.theme = next; localStorage.setItem(THEME_KEY, next); }} aria-label="Сменить тему">{theme === "dark" ? "☀" : "☾"}</button></div>
     </header>
     <main className="shell">
-      {error && <div className="alert" role="alert">{error}<button onClick={() => setError("")} aria-label="Закрыть">×</button></div>}
+      {error && <div className="alert" role="alert"><span>{error}</span><div><button className="textBtn" onClick={() => window.location.reload()}>Повторить</button><button onClick={() => setError("")} aria-label="Закрыть">×</button></div></div>}
       {loading ? <Empty title="Загружаем план" text="Подождите немного." />
         : path === "/home" ? <Home plan={plan} go={go} />
         : path === "/onboarding" ? <Onboarding key={plan?.profile.id ?? "new"} initial={profile} save={saveProfile} busy={busy} />
         : path === "/profile" ? <ProfileForm key={plan?.profile.id ?? "new"} initial={profile} save={saveProfile} busy={busy} diagnosis={diagnosis} plan={plan} />
-        : path === "/discover" ? <Discover rows={recommendations} hasProfile={Boolean(plan)} go={go} selected={compareIds} toggle={toggleCompare} refresh={refreshRecommendations} busy={busy} />
+        : path === "/discover" ? <Discover rows={recommendations} hasProfile={Boolean(plan)} profile={plan?.profile} diagnosis={diagnosis} preferredStates={plan?.profile.preferredStates} go={go} selected={compareIds} toggle={toggleCompare} refresh={refreshRecommendations} busy={busy} />
         : path === "/compare" ? <Compare rows={selected} comparisons={comparison} go={go} toggle={toggleCompare} load={loadComparison} busy={busy} />
         : path === "/plan" ? <PlanPage plan={plan} setTask={setTask} busy={busy} go={go} />
         : letterUniversity && plan ? <LetterComposer key={letterUniversity.universityId} universityId={letterUniversity.universityId} universityName={letterUniversity.university.name} profileId={plan.profile.id} go={go} />
@@ -188,9 +197,15 @@ function Home({ plan, go }: { plan: Plan | null; go: (path: string) => void }) {
 }
 
 function ProfileForm({ initial, save, busy, diagnosis, plan }: { initial: StudentProfile; save: (profile: StudentProfile) => Promise<void>; busy: boolean; diagnosis: Diagnosis | null; plan: Plan | null }) {
-  const [draft, setDraft] = useState<StudentProfile>(initial);
-  const [stateToAdd, setStateToAdd] = useState("");
+  const [draft, setDraft] = useState<StudentProfile>(() => ({
+    ...initial, targetField: initial.targetField === "other" ? "computer_science" : initial.targetField,
+  }));
   const update = (values: Partial<StudentProfile>) => setDraft((current) => ({ ...current, ...values }));
+  const addPreferredState = (code: string) => {
+    const current = draft.preferredStates ?? [];
+    if (!code || current.includes(code) || current.length >= 10) return;
+    update({ preferredStates: [...current, code] });
+  };
   const exam = draft.englishExam ?? { type: "IELTS" as const, status: "not_planned" as const };
   const sat = draft.sat ?? { status: "not_planned" as const };
   function submit(event: FormEvent<HTMLFormElement>) { event.preventDefault(); void save(draft); }
@@ -198,7 +213,8 @@ function ProfileForm({ initial, save, busy, diagnosis, plan }: { initial: Studen
     <PageHead eyebrow="Профиль" title="Ваш путь к бакалавриату" text="Подбор доступен для колледжей и университетов США. Все поля отражают данные, которые использует модель рекомендаций." />
     <form className="profileForm" onSubmit={submit}>
       <div className="formSection"><h2>Цель обучения</h2><p>Бакалавриат в колледжах и университетах США.</p><div className="fieldGrid">
-        <label>Направление<select value={draft.targetField} onChange={(event) => update({ targetField: event.target.value as StudyField })}>{Object.entries(fields).map(([key, value]) => <option key={key} value={key}>{value}</option>)}</select></label>
+        <label>Направление<select value={draft.targetField} onChange={(event) => update({ targetField: event.target.value as StudyField })}>{selectableFields.map((key) => <option key={key} value={key}>{fields[key]}</option>)}</select></label>
+        <label>Текущий этап<select value={draft.studentStage} onChange={(event) => update({ studentStage: event.target.value as StudentProfile["studentStage"] })}>{Object.entries(studentStages).map(([key, value]) => <option key={key} value={key}>{value}</option>)}</select></label>
         <label>Год начала обучения<input type="number" min="2020" max="2100" required value={draft.targetIntakeYear} onChange={(event) => update({ targetIntakeYear: Number(event.target.value) })} /></label>
       </div></div>
       <div className="formSection"><h2>Академические данные</h2><div className="fieldGrid">
@@ -213,9 +229,9 @@ function ProfileForm({ initial, save, busy, diagnosis, plan }: { initial: Studen
         {sat.status === "taken" && <label>Результат SAT<input type="number" min="400" max="1600" step="1" required value={sat.score ?? ""} onChange={(event) => update({ sat: { ...sat, score: event.target.value === "" ? undefined : Number(event.target.value) } })} /></label>}
       </div></div>
       <div className="formSection"><h2>Бюджет и предпочтения</h2><div className="fieldGrid">
-        <label>Годовой бюджет, USD<input type="number" min="0" step="1" required value={draft.annualBudgetUsd} onChange={(event) => update({ annualBudgetUsd: Number(event.target.value) })} /></label>
+        <label>Годовой бюджет на обучение, USD<input type="number" min="0" step="1" required value={draft.annualBudgetUsd} onChange={(event) => update({ annualBudgetUsd: Number(event.target.value) })} /><small>Без проживания, питания, страховки и транспорта.</small></label>
         <label>Размер кампуса<select value={draft.campusSize ?? "any"} onChange={(event) => update({ campusSize: event.target.value as StudentProfile["campusSize"] })}><option value="any">Любой</option><option value="small">Небольшой</option><option value="medium">Средний</option><option value="large">Крупный</option></select></label>
-      </div><p>Предпочтительные штаты (необязательно, до 10)</p><div className="statePicker"><select aria-label="Выберите штат" value={stateToAdd} onChange={(event) => setStateToAdd(event.target.value)}><option value="">Выберите штат</option>{stateOptions.map(([code, name]) => <option key={code} value={code} disabled={draft.preferredStates?.includes(code)}>{name}</option>)}</select><button type="button" className="ghost" disabled={!stateToAdd || (draft.preferredStates?.length ?? 0) >= 10} onClick={() => { update({ preferredStates: [...(draft.preferredStates ?? []), stateToAdd] }); setStateToAdd(""); }}>Добавить штат</button></div><div className="choiceRow stateChoices">{draft.preferredStates?.map((code) => <button type="button" key={code} className="selected" onClick={() => update({ preferredStates: draft.preferredStates?.filter((item) => item !== code) })}>{stateNames[code] ?? code} ×</button>)}</div></div>
+      </div><p>Предпочтительные штаты (необязательно, до 10)</p><div className="statePicker"><select aria-label="Добавить предпочтительный штат" value="" onChange={(event) => addPreferredState(event.target.value)} disabled={(draft.preferredStates?.length ?? 0) >= 10}><option value="">Добавить штат…</option>{stateOptions.map(([code, name]) => <option key={code} value={code} disabled={draft.preferredStates?.includes(code)}>{name}</option>)}</select></div><div className="choiceRow stateChoices">{draft.preferredStates?.map((code) => <button type="button" key={code} className="selected" onClick={() => update({ preferredStates: draft.preferredStates?.filter((item) => item !== code) })}>{stateNames[code] ?? code} ×</button>)}</div><p className="preferenceHelp">Сначала покажем подходящие варианты из выбранных штатов.</p></div>
       <div className="formActions"><Action onClick={() => {}} disabled={busy}>{busy ? "Сохраняем…" : plan ? "Пересчитать план" : "Сохранить и подобрать"} →</Action></div>
     </form>
     {diagnosis && <DiagnosisView profile={initial} diagnosis={diagnosis} />}
@@ -224,7 +240,15 @@ function ProfileForm({ initial, save, busy, diagnosis, plan }: { initial: Studen
 
 function DiagnosisView({ profile, diagnosis }: { profile: StudentProfile; diagnosis: Diagnosis }) {
   const content = diagnosisLines(profile, diagnosis);
-  return <section className="diagnosis"><div className="sectionTitle"><span className="eyebrow">Разбор профиля</span><h2>На что обратить внимание</h2></div><p>{content.summary}</p><div className="infoGrid">{content.strengths.length > 0 && <Info title="Сильные стороны" rows={content.strengths.map((line) => ["✓", line])} />}{content.constraints.length > 0 && <Info title="Что проверить" rows={content.constraints.map((line) => ["!", line])} />}{content.focus.length > 0 && <Info title="Следующие действия" rows={content.focus.map((line) => ["→", line])} />}</div></section>;
+  const points = [
+    ...content.strengths.map((line) => ({ icon: "✓", line })),
+    ...content.constraints.map((line) => ({ icon: "!", line })),
+    ...content.focus.map((line) => ({ icon: "→", line })),
+  ];
+  return <section className="diagnosisCompact" aria-label="Разбор профиля">
+    <p>{content.summary}</p>
+    {points.length > 0 && <details><summary>Что учесть при выборе</summary><ul>{points.map((point, index) => <li key={`${point.icon}-${index}`}><span aria-hidden="true">{point.icon}</span>{point.line}</li>)}</ul></details>}
+  </section>;
 }
 
 function UniversityCard({ row, go, selected, toggle }: { row: Recommendation; go: (path: string) => void; selected?: boolean; toggle?: (id: string) => void }) {
@@ -243,7 +267,9 @@ function UniversityCard({ row, go, selected, toggle }: { row: Recommendation; go
         <span><b>{money(u.tuitionOutOfStateUsd)}</b><small>Обучение в год</small></span>
       </div>
       <div className="tags">{visibleProgramFields(u.programs).slice(0, 3).map((field) =>
-        <span key={field}>{programName(field)}</span>)}</div>
+        <span key={field}>{programName(field)}</span>)}
+        {row.reasonCodes.includes("PREFERRED_STATE") && <span className="preferenceMatchTag">✓ Предпочтительный штат</span>}
+      </div>
       <div className="cardActions">
         <button className="cardPrimary" onClick={() => go(`/universities/${encodeURIComponent(u.id)}`)}>Подробнее →</button>
         {toggle && <button className="cardSecondary" onClick={() => toggle(u.id)}>{selected ? "Убрать" : "Сравнить"}</button>}
@@ -251,7 +277,7 @@ function UniversityCard({ row, go, selected, toggle }: { row: Recommendation; go
     </div>
   </article>;
 }
-function Discover({ rows, hasProfile, go, selected, toggle, refresh, busy }: { rows: Recommendation[]; hasProfile: boolean; go: (path: string) => void; selected: string[]; toggle: (id: string) => void; refresh: () => Promise<void>; busy: boolean }) {
+function Discover({ rows, hasProfile, profile, diagnosis, preferredStates, go, selected, toggle, refresh, busy }: { rows: Recommendation[]; hasProfile: boolean; profile?: StudentProfile; diagnosis: Diagnosis | null; preferredStates?: string[]; go: (path: string) => void; selected: string[]; toggle: (id: string) => void; refresh: () => Promise<void>; busy: boolean }) {
   const [query, setQuery] = useState("");
   const [max, setMax] = useState(100000);
   const filtered = rows.filter((row) => {
@@ -259,10 +285,14 @@ function Discover({ rows, hasProfile, go, selected, toggle, refresh, busy }: { r
     const text = `${u.name} ${u.city ?? ""} ${u.state ?? ""} ${u.programs.map((program) => fields[program.field]).join(" ")}`.toLowerCase();
     return text.includes(query.toLowerCase()) && (u.tuitionOutOfStateUsd === undefined || u.tuitionOutOfStateUsd <= max);
   });
-  const source = rows[0]?.university.provider === "demo" ? "Демонстрационные данные" : "Данные College Scorecard";
+  const hasDemo = rows.some((row) => row.university.provider === "demo");
+  const hasLive = rows.some((row) => row.university.provider !== "demo");
+  const source = hasDemo && hasLive ? "College Scorecard и резервные демонстрационные данные" : hasDemo ? "Демонстрационные данные" : "Данные College Scorecard";
   return <section>
     <PageHead eyebrow="Подбор" title="Университеты под ваш профиль" text="Оценка показывает соответствие профилю, а не вероятность поступления. Уточняйте стоимость и условия на сайте университета." />
+    {profile && diagnosis && <DiagnosisView profile={profile} diagnosis={diagnosis} />}
     {hasProfile && <div className="refreshBar"><span>{rows.length ? `${source} · подбор сохранён в вашем плане` : "Рекомендаций пока нет"}</span><button className="textBtn" disabled={busy} onClick={() => void refresh()}>{busy ? "Обновляем…" : "Обновить подбор ↻"}</button></div>}
+    {preferredStates?.length ? <div className="preferenceNotice"><b>Приоритетные штаты: {preferredStates.map((code) => stateNames[code] ?? code).join(", ")}.</b><span>Сначала показываем подходящие варианты из этих штатов.</span></div> : null}
     {rows.length ? <>
       <div className="search"><span className="searchIcon" /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Поиск по подбору: название или город" aria-label="Поиск университетов" /></div>
       <div className="discoverGrid"><aside className="filters"><div><b>Фильтры</b><button className="textBtn" onClick={() => { setQuery(""); setMax(100000); }}>Сбросить</button></div><label>Максимальная стоимость обучения: {money(max)}<input type="range" min="0" max="100000" step="1000" value={max} onChange={(event) => setMax(Number(event.target.value))} /></label><div className="filterNote">Показаны программы бакалавриата в США по выбранному направлению.</div></aside>
@@ -359,6 +389,7 @@ function Compare({ rows, comparisons, go, toggle, load, busy }: { rows: Recommen
       <span>Выбрано: {rows.length} из 3</span>
       {showRequirements && <Action secondary onClick={() => void load()} disabled={busy}>{busy ? "Загружаем…" : "Обновить данные"}</Action>}
     </div>
+    <p className="mobileScrollHint">Проведите таблицу влево, чтобы увидеть остальные варианты.</p>
     <div className="compareTable" style={{ gridTemplateColumns: `165px repeat(${rows.length}, minmax(220px, 1fr))` }}>
       <div className="compareRows" style={{ gridTemplateRows: columnRows }}>
         <b>Университет</b><b>Соответствие</b><b>Штат</b><b>Обучение</b>
@@ -397,14 +428,21 @@ function PlanPage({ plan, setTask, busy, go }: { plan: Plan | null; setTask: (id
   const universities = plan.recommendationRun.recommendations.filter((item) => plan.roadmap.selectedUniversityIds.includes(item.universityId)).map((item) => item.university);
   const next = plan.roadmap.items.find((item) => item.id === plan.roadmap.nextActionId);
   const done = plan.roadmap.items.filter((item) => item.status === "done").length;
+  const scorecardPlan = universities.length > 0 && universities.every((university) => university.provider === "college_scorecard");
+  const demoPlan = universities.length > 0 && universities.every((university) => university.sourceStatus === "demo");
   return <section>
     <PageHead eyebrow="План поступления" title="Подготовка по шагам" text="План составлен по наиболее подходящим рекомендациям. Выполненные задачи сохраняются при пересчёте, если условия не изменились." />
     <div className="planOverview">
       <div><span className="eyebrow">Следующее действие</span><h2>{next ? roadmapTitle(next, universities) : "Все доступные задачи выполнены"}</h2><p>{done} из {plan.roadmap.items.length} задач выполнено</p></div>
       <Action secondary onClick={() => go("/profile")}>Обновить профиль</Action>
     </div>
-    <div className="selectedSchools"><b>Университеты в плане:</b>{universities.map((u) =>
+    <div className="selectedSchools"><b>Рекомендации, на которых основан план:</b>{universities.map((u) =>
       <button key={u.id} onClick={() => go(`/universities/${encodeURIComponent(u.id)}`)}>{u.name} ↗</button>)}</div>
+    {universities.length > 0 && <p className="planSourceNote">{scorecardPlan
+      ? "Названия и направления — из College Scorecard. Подбор рассчитан Admitly; актуальные требования и стоимость для иностранных студентов проверьте на сайте учебного заведения."
+      : demoPlan
+        ? "Это демонстрационные учебные заведения. Они не представляют реальные университеты или подтверждённые условия поступления."
+        : "Подбор рассчитан Admitly. Проверяйте источник и условия поступления в карточке каждого варианта."}</p>}
     <div className="applicationList roadmapList">{plan.roadmap.items.map((item) => <article key={item.id} className={item.isNextAction ? "nextTask" : ""}>
       <div>
         <span className="badge">{item.isNextAction ? "Следующий шаг" : statuses[item.status]}</span>

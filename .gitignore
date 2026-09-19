@@ -12,12 +12,13 @@ coverage/
 /backups/
 /.data/
 *.dump
-/DOCS/
+/docs/
 .env
 .env.*
 !.env.example
 deploy/.env.production
 *.log
+tmp/
 
 # Local editor, OS, and assistant state.
 .vscode/

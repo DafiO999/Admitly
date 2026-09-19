@@ -90,7 +90,7 @@ export const demoRequirements = admissionRequirementSchema.array().parse(
 
 export const canonicalDemoProfile = studentProfileSchema.parse({
   targetCountry: 'US', targetDegree: 'bachelor', targetField: 'computer_science',
-  targetIntakeYear: 2028, gpaValue: 3.6, gpaScale: 4,
+  targetIntakeYear: 2028, studentStage: 'grade_11', gpaValue: 3.6, gpaScale: 4,
   englishExam: { type: 'IELTS', status: 'taken', score: 7 },
   sat: { status: 'taken', score: 1240 },
   annualBudgetUsd: 26000, preferredStates: ['CA', 'TX'], campusSize: 'any',

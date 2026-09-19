@@ -28,7 +28,7 @@ describe('POST /api/roadmap', () => {
       expect(response.statusCode).toBe(200);
       expect(response.json()).toMatchObject({
         mode: 'rules', sourceCoverage: { official: 0, verified: 0, demo: 4, unknown: 0 },
-        roadmap: { rulesVersion: '1.0.0', nextActionId: 'research:programs' },
+        roadmap: { rulesVersion: '1.1.0', nextActionId: 'academic:grade-11-focus:computer_science' },
       });
       expect(response.json().roadmap.items.filter((item: { isNextAction: boolean }) => item.isNextAction))
         .toHaveLength(1);

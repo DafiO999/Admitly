@@ -20,6 +20,7 @@ import { PrismaPlanRepository } from '../../src/infrastructure/db/repositories/p
 import { canonicalDemoProfile, demoUniversities } from '../../src/infrastructure/demo/fixtures.js';
 import { LocalFileStorage } from '../../src/infrastructure/storage/local-file-storage.js';
 import { getTestDatabaseUrl } from './test-database-url.js';
+import { createProfileAccessToken } from '../../src/http/profile-access.js';
 
 const databaseUrl = getTestDatabaseUrl(process.env);
 const pdf = Buffer.from('%PDF-1.4\nprivate certificate\n');
@@ -118,6 +119,9 @@ describe('admission letter persistence and routes', () => {
       mailProvider,
       mailDeliveryMode: 'smtp',
       attachmentLimits: { maxFileBytes: 50, maxTotalBytes: 40 },
+    });
+    app.addHook('onRequest', async (request) => {
+      request.headers['x-admitly-access-key'] = createProfileAccessToken(profileId, 'admitly-local-profile-access-secret');
     });
     try {
       await client.university.create({ data: {

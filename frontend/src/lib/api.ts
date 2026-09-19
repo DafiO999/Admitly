@@ -2,6 +2,7 @@ export type StudyField = "computer_science" | "engineering" | "business" | "econ
 // Increment alongside the backend version when saved recommendation snapshots need refreshing.
 export const RECOMMENDATION_ENGINE_VERSION = "1.1.0";
 export type ExamStatus = "not_planned" | "planned" | "taken";
+export type StudentStage = "grade_9_10" | "grade_11" | "grade_12" | "graduated";
 export type RoadmapStatus = "pending" | "in_progress" | "done" | "blocked";
 export type SourceStatus = "official" | "verified" | "demo" | "unknown";
 
@@ -11,6 +12,7 @@ export interface StudentProfile {
   targetDegree: "bachelor";
   targetField: StudyField;
   targetIntakeYear: number;
+  studentStage: StudentStage;
   gpaValue: number;
   gpaScale: 4 | 5 | 10 | 100;
   englishExam?: { type: "IELTS" | "TOEFL" | "DUOLINGO"; status: ExamStatus; score?: number };
@@ -52,6 +54,7 @@ export interface Plan {
   roadmap: Roadmap & { id: string; selectedUniversityIds: string[] };
   sourceCoverage: SourceCoverage;
 }
+export type PlanResponse = Plan & { accessToken?: string };
 export interface Diagnosis { goalSummary: string; strengths: string[]; constraints: string[]; focusNow: string[] }
 export interface Comparison { university: University; recommendation: Omit<Recommendation, "university"> | null; requirements: Requirement[]; requirementsStatus: "reported" | "unknown" }
 
@@ -74,6 +77,8 @@ const errorMessages: Record<string, string> = {
   INVALID_FILE: "Не удалось загрузить файл. Проверьте его формат.",
   MAIL_PROVIDER_UNAVAILABLE: "Отправка почты сейчас недоступна.",
   MAIL_SEND_FAILED: "Не удалось подтвердить отправку. Проверьте статус письма перед повторной попыткой.",
+  UNAUTHORIZED: "Доступ к этому профилю истёк. Заполните профиль заново.",
+  INVALID_RESPONSE: "Сервер вернул некорректные данные. Обновите страницу и попробуйте снова.",
 };
 
 export class ApiError extends Error {
@@ -83,9 +88,10 @@ export class ApiError extends Error {
 export async function apiRequest<T>(path: string, method: "GET" | "POST" | "PUT" | "PATCH" | "DELETE" = "GET", body?: unknown, headers?: Record<string, string>): Promise<T> {
   let response: Response;
   try {
+    const accessToken = typeof window === "undefined" ? null : localStorage.getItem("admitly.accessToken");
     response = await fetch(`/api${path}`, {
       method,
-      headers: { ...(!(body instanceof FormData) && body !== undefined ? { "Content-Type": "application/json" } : {}), "Accept-Language": "ru", ...headers },
+      headers: { ...(!(body instanceof FormData) && body !== undefined ? { "Content-Type": "application/json" } : {}), "Accept-Language": "ru", ...(accessToken ? { "X-Admitly-Access-Key": accessToken } : {}), ...headers },
       ...(body === undefined ? {} : { body: body instanceof FormData ? body : JSON.stringify(body) }),
       cache: "no-store",
     });
@@ -97,7 +103,22 @@ export async function apiRequest<T>(path: string, method: "GET" | "POST" | "PUT"
     const code = data?.error?.code ?? "UNKNOWN";
     throw new ApiError(errorMessages[code] ?? `Ошибка сервера (${response.status}).`, code, response.status);
   }
-  return response.json() as Promise<T>;
+  const data: unknown = await response.json().catch(() => null);
+  if (data === null || (typeof data !== "object" && !Array.isArray(data))) {
+    throw new ApiError(errorMessages.INVALID_RESPONSE!, "INVALID_RESPONSE", response.status);
+  }
+  return data as T;
+}
+
+export function requirePlan(value: unknown): PlanResponse {
+  const candidate = value as Partial<PlanResponse> | null;
+  if (!candidate || typeof candidate !== "object" || !candidate.profile || typeof candidate.profile !== "object"
+    || !candidate.recommendationRun || !Array.isArray(candidate.recommendationRun.recommendations)
+    || !candidate.roadmap || !Array.isArray(candidate.roadmap.items)
+    || !Array.isArray(candidate.roadmap.selectedUniversityIds)) {
+    throw new ApiError(errorMessages.INVALID_RESPONSE!, "INVALID_RESPONSE", 200);
+  }
+  return candidate as PlanResponse;
 }
 
 export async function api<T>(path: string, method: "GET" | "POST" | "PUT" | "PATCH" = "GET", body?: unknown): Promise<T> {
@@ -106,7 +127,7 @@ export async function api<T>(path: string, method: "GET" | "POST" | "PUT" | "PAT
 
 export const defaultProfile: StudentProfile = {
   targetCountry: "US", targetDegree: "bachelor", targetField: "computer_science",
-  targetIntakeYear: Math.max(2028, new Date().getFullYear() + 1),
+  targetIntakeYear: Math.max(2028, new Date().getFullYear() + 1), studentStage: "grade_11",
   gpaValue: 3.5, gpaScale: 4, annualBudgetUsd: 30000,
   englishExam: { type: "IELTS", status: "not_planned" }, sat: { status: "not_planned" },
   preferredStates: [], campusSize: "any",

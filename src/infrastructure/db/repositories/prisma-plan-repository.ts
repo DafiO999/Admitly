@@ -227,4 +227,22 @@ export class PrismaPlanRepository implements PlanRepository {
       throw new DatabaseUnavailableError();
     }
   }
+
+  async findRoadmapProfileId(roadmapId: string): Promise<string | null> {
+    try {
+      const row = await this.client.roadmap.findUnique({ where: { id: roadmapId }, select: { profileId: true } });
+      return row?.profileId ?? null;
+    } catch {
+      throw new DatabaseUnavailableError();
+    }
+  }
+
+  async findLetterProfileId(letterId: string): Promise<string | null> {
+    try {
+      const row = await this.client.admissionLetter.findUnique({ where: { id: letterId }, select: { profileId: true } });
+      return row?.profileId ?? null;
+    } catch {
+      throw new DatabaseUnavailableError();
+    }
+  }
 }

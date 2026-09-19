@@ -60,4 +60,21 @@ describe('completed roadmap task preservation', () => {
       canonicalDemoProfile, [university.id], [university.id]);
     expect(changed.items.find((item) => item.id === id)?.status).toBe('pending');
   });
+
+  it('keeps a still-relevant academic completion after budget and exam changes', () => {
+    const university = demoUniversities[0]!;
+    const schools = [{ university, requirements: [] }];
+    const id = 'academic:grade-11-focus:computer_science';
+    const completed = buildRoadmap(canonicalDemoProfile, schools, { [id]: 'done' }).roadmap;
+    const changedProfile = {
+      ...canonicalDemoProfile,
+      annualBudgetUsd: 8_000,
+      englishExam: { type: 'IELTS' as const, status: 'planned' as const },
+    };
+    const recalculated = buildRoadmap(changedProfile, schools).roadmap;
+    const merged = preserveCompletedTasks(
+      completed, recalculated, canonicalDemoProfile, changedProfile, [university.id], [university.id],
+    );
+    expect(merged.items.find((item) => item.id === id)?.status).toBe('done');
+  });
 });

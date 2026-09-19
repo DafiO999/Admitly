@@ -4016,7 +4016,8 @@ body .diagnosisRecommendations li::before {
 /* Admitly API screens */
 .eyebrow { display: inline-block; margin-bottom: 14px; color: var(--accent); font-size: 13px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
 .alert { margin-bottom: 24px; padding: 14px 18px; display: flex; justify-content: space-between; gap: 16px; border: 1px solid var(--danger); border-radius: 11px; background: var(--surface); color: var(--danger); }
-.alert button { font-size: 24px; line-height: 1; }
+.alert > div { display: flex; align-items: center; gap: 12px; }
+.alert button[aria-label="Закрыть"] { font-size: 24px; line-height: 1; }
 .pageHead { margin-bottom: 35px; }
 .pageHead h1 { max-width: 850px; }
 .apiCard .cardBackdrop { z-index: 0; transition: transform .45s cubic-bezier(.22, 1, .36, 1); }
@@ -4039,12 +4040,18 @@ body .diagnosisRecommendations li::before {
 .stateChoices button { min-height: 38px; padding: 7px 12px; }
 .statePicker { display: flex; align-items: center; gap: 10px; margin: 14px 0; }
 .statePicker select { min-height: 44px; min-width: min(100%, 260px); padding: 9px 12px; border: 1px solid var(--line); border-radius: 9px; color: var(--ink); background: var(--paper); }
+.preferenceHelp { margin: 12px 0 0 !important; color: var(--ink-soft); font-size: 13px !important; line-height: 1.55; }
+.preferenceNotice { margin: 18px 0; padding: 14px 17px; display: grid; gap: 4px; border-left: 3px solid var(--accent); border-radius: 8px; color: var(--ink-soft); background: var(--surface-2); font-size: 14px; }
+.preferenceNotice b { color: var(--ink); }
+.apiCard .tags .preferenceMatchTag { border-color: color-mix(in srgb, var(--signal) 75%, #fff); color: #fff; background: color-mix(in srgb, var(--signal) 42%, rgba(53, 27, 15, 0.46)); }
 .formActions { display: flex; justify-content: flex-end; }
-.diagnosis { margin-top: 35px; }
-.diagnosis > p { margin-bottom: 25px; color: var(--ink-soft); }
-.diagnosis .infoGrid { grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); }
-.diagnosis .info p { align-items: start; }
-.diagnosis .info p b { text-align: left; font-weight: 400; }
+.diagnosisCompact { margin: 22px 0 16px; padding: 14px 0; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); color: var(--ink-soft); }
+.diagnosisCompact > p { margin: 0; font-size: 14px; line-height: 1.65; }
+.diagnosisCompact details { margin-top: 8px; }
+.diagnosisCompact summary { width: fit-content; cursor: pointer; color: var(--accent-strong); font-size: 14px; }
+.diagnosisCompact ul { margin: 12px 0 0; padding: 0; display: grid; gap: 7px; list-style: none; }
+.diagnosisCompact li { display: grid; grid-template-columns: 18px minmax(0, 1fr); gap: 7px; font-size: 14px; line-height: 1.5; }
+.diagnosisCompact li span { color: var(--accent); }
 .linkButton { display: inline-flex; align-items: center; text-decoration: none; }
 .sourceNote { margin: 24px 0; padding: 16px 19px; border-left: 3px solid var(--accent); border-radius: 6px; background: var(--surface-2); color: var(--ink-soft); font-size: 14px; }
 .sourceNote a, .roadmapList a, .requirementList a { color: var(--accent); }
@@ -4052,6 +4059,7 @@ body .diagnosisRecommendations li::before {
 .apiExplanation { margin-top: 18px; padding: 16px 18px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); }
 .apiExplanation p:first-child { color: var(--ink); font-weight: 700; }
 .compareToolbar { margin-bottom: 18px; display: flex; align-items: center; justify-content: space-between; gap: 14px; }
+.mobileScrollHint { display: none; margin: -8px 0 14px; color: var(--ink-soft); font-size: 13px; }
 .compareTable { min-width: 0; }
 .compareCol { min-width: 220px; }
 .compareCol .requirementList { align-items: stretch; display: grid; gap: 12px; }
@@ -4059,21 +4067,54 @@ body .diagnosisRecommendations li::before {
 .planOverview { margin-bottom: 18px; padding: 28px; display: flex; align-items: center; justify-content: space-between; gap: 24px; border-radius: var(--radius); background: var(--accent-soft); }
 .planOverview h2 { max-width: 720px; font-size: 27px; }
 .planOverview p { margin-bottom: 0; color: var(--ink-soft); }
-.selectedSchools { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
-.selectedSchools button { padding: 7px 10px; border: 1px solid var(--line); border-radius: 8px; color: var(--accent); background: var(--surface); font-size: 14px; }
-.roadmapList article { grid-template-columns: 1fr 160px; align-items: center; }
-.roadmapList article.nextTask { border-color: var(--accent); box-shadow: 0 8px 24px color-mix(in srgb, var(--accent) 12%, transparent); }
-.roadmapList label { display: grid; gap: 7px; }
-.roadmapList select { width: 100%; }
+.selectedSchools { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 8px; }
+.selectedSchools button { padding: 8px 12px; border: 1px solid var(--line); border-radius: 9px; color: var(--accent-strong); background: var(--surface); font-size: 14px; }
+.planSourceNote { margin: 0 0 24px; color: var(--ink-soft); font-size: 14px; line-height: 1.55; }
+.applicationList.roadmapList { border-top: 0; gap: 12px; }
+.applicationList.roadmapList > article {
+  position: relative;
+  min-width: 0;
+  min-height: 112px;
+  padding: 22px 24px;
+  grid-template-columns: minmax(0, 1fr) 180px;
+  align-items: center;
+  gap: 24px;
+  border: 1px solid var(--line);
+  box-shadow: 0 3px 14px rgba(121, 31, 39, 0.04);
+}
+.applicationList.roadmapList > article > div { min-width: 0; }
+.applicationList.roadmapList > article h3 { margin-top: 9px; font-size: 18px; line-height: 1.35; overflow-wrap: anywhere; }
+.applicationList.roadmapList > article .badge { display: inline-flex; align-items: center; min-height: 25px; }
+.applicationList.roadmapList > article.nextTask {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent-soft) 24%, var(--surface));
+  box-shadow: 0 8px 24px color-mix(in srgb, var(--accent) 10%, transparent);
+}
+.applicationList.roadmapList label { display: grid; gap: 8px; color: var(--ink-soft); font-size: 13px; font-weight: 700; }
+.applicationList.roadmapList select {
+  width: 100%;
+  min-height: 42px;
+  padding: 8px 12px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  color: var(--ink);
+  background: var(--surface);
+  font-size: 14px;
+}
 .roadmapList a { display: inline-block; margin-top: 7px; font-size: 13px; }
-@media (max-width: 900px) { .diagnosis .infoGrid { grid-template-columns: 1fr; } }
 @media (max-width: 680px) {
   .profileForm .fieldGrid { grid-template-columns: 1fr; }
-  .formSection { padding: 20px; }
+  .profileForm, .profileForm > *, .formSection, .statePicker, .statePicker select { min-width: 0; max-width: 100%; }
+  .statePicker select { width: 100%; }
+  .formSection { padding: 20px; overflow: hidden; }
   .planOverview { align-items: start; flex-direction: column; }
-  .roadmapList article { grid-template-columns: 1fr; }
+  .applicationList.roadmapList > article { min-height: 0; padding: 20px; grid-template-columns: minmax(0, 1fr); gap: 16px; }
   .detailHero .scoreBig { width: 190px; height: 190px; }
   .compareTable { overflow-x: auto; }
+  .mobileScrollHint { display: block; }
+  .compareCol .tableLink { overflow-wrap: anywhere; text-align: left; }
+  .alert { align-items: flex-start; flex-direction: column; }
+  .alert > div { width: 100%; justify-content: space-between; }
 }
 .apiOnboard .fieldGrid label, .onboardStates label { display: grid; gap: 8px; color: var(--ink-soft); font-size: 14px; }
 .apiOnboard input, .apiOnboard select { width: 100%; min-height: 48px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; color: var(--ink); background: var(--surface); }

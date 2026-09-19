@@ -16,6 +16,7 @@ import { canonicalDemoProfile, demoRequirements, demoUniversities } from '../../
 import { DemoAdmissionRequirementProvider } from '../../src/infrastructure/demo/admission-requirement-provider.js';
 import { DemoUniversityProvider } from '../../src/infrastructure/demo/university-provider.js';
 import { getTestDatabaseUrl } from './test-database-url.js';
+import { createProfileAccessToken } from '../../src/http/profile-access.js';
 
 const databaseUrl = getTestDatabaseUrl(process.env);
 
@@ -47,7 +48,7 @@ describe('Prisma plan repository', () => {
       const saved = await repository.saveGenerated(input);
       expect(saved.profile.id).toBe(profileId);
       expect(saved.profileHash).toBe(createProfileHash(input.profile));
-      expect(saved.roadmap.nextActionId).toBe('research:programs');
+      expect(saved.roadmap.nextActionId).toBe('academic:grade-11-focus:computer_science');
       const loaded = await repository.findCurrent(profileId);
       expect(loaded).toEqual(saved);
       const stored = await client.profile.findUnique({
@@ -135,6 +136,9 @@ describe('Prisma plan repository', () => {
     const repository = new PrismaPlanRepository(client);
     const profileId = randomUUID();
     const app = buildApp({}, { planRepository: repository });
+    app.addHook('onRequest', async (request) => {
+      request.headers['x-admitly-access-key'] = createProfileAccessToken(profileId, 'admitly-local-profile-access-secret');
+    });
     try {
       const saved = await repository.saveGenerated(generatedPlan(profileId));
       await client.recommendationRun.update({
@@ -179,6 +183,9 @@ describe('persistence API', () => {
       universityProvider: new DemoUniversityProvider(),
       requirementProvider: new DemoAdmissionRequirementProvider(),
       planRepository: new PrismaPlanRepository(client), aiProvider: null,
+    });
+    app.addHook('onRequest', async (request) => {
+      request.headers['x-admitly-access-key'] = createProfileAccessToken(profileId, 'admitly-local-profile-access-secret');
     });
     try {
       const profile = { ...canonicalDemoProfile, id: profileId };
@@ -228,6 +235,9 @@ describe('persistence API', () => {
       requirementProvider: new DemoAdmissionRequirementProvider(),
       planRepository: new PrismaPlanRepository(client), aiProvider: null,
     });
+    app.addHook('onRequest', async (request) => {
+      request.headers['x-admitly-access-key'] = createProfileAccessToken(profileId, 'admitly-local-profile-access-secret');
+    });
     try {
       const response = await app.inject({
         method: 'PUT', url: '/api/profile',
@@ -236,7 +246,7 @@ describe('persistence API', () => {
       expect(response.statusCode).toBe(200);
       expect(response.json().recommendationRun.recommendations).toEqual([]);
       expect(response.json().roadmap.selectedUniversityIds).toEqual([]);
-      expect(response.json().roadmap.nextActionId).toBe('research:programs');
+      expect(response.json().roadmap.nextActionId).toBe('academic:grade-11-focus:other');
       const loaded = await app.inject({ method: 'GET', url: `/api/plan/${profileId}` });
       expect(loaded.json()).toEqual(response.json());
     } finally {
@@ -258,6 +268,9 @@ describe('persistence API', () => {
         return demoRequirementProvider.listByUniversityIds(ids);
       } },
       planRepository: new PrismaPlanRepository(client), aiProvider: null,
+    });
+    app.addHook('onRequest', async (request) => {
+      request.headers['x-admitly-access-key'] = createProfileAccessToken(profileId, 'admitly-local-profile-access-secret');
     });
     const profile = { ...canonicalDemoProfile, id: profileId };
     const itemStatus = (plan: { roadmap: { items: { id: string; status: string }[] } }, id: string) =>

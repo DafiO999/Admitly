@@ -19,7 +19,8 @@ describe('plan persistence service', () => {
       requirementProvider: {
         listByUniversityIds: async (ids) => demoRequirements.filter((requirement) => ids.includes(requirement.universityId)),
       },
-    }), () => ({ saveGenerated, findCurrent: async () => null, updateItemStatus: async () => null }));
+    }), () => ({ saveGenerated, findCurrent: async () => null, updateItemStatus: async () => null,
+      findRoadmapProfileId: async () => null, findLetterProfileId: async () => null }));
     expect(saveGenerated).toHaveBeenCalledOnce();
     const ranked = captured!.recommendations.find((item) => item.universityId === snapshot.id)!;
     expect(ranked.university.name).toBe('Snapshot University');
