@@ -43,7 +43,9 @@ services:
       db:
         condition: service_healthy
     networks:
-      - default
+      default:
+        aliases:
+          - admitly-api
     healthcheck:
       test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3001/api/ready').then(r => { if (!r.ok) process.exitCode = 1; }).catch(() => { process.exitCode = 1; })"]
       interval: 10s
@@ -56,13 +58,13 @@ services:
       context: ../frontend
       dockerfile: Dockerfile
       args:
-        API_ORIGIN: http://api:3001
+        API_ORIGIN: http://admitly-api:3001
     restart: unless-stopped
     environment:
       NODE_ENV: production
       HOSTNAME: 0.0.0.0
       PORT: "3000"
-      API_ORIGIN: http://api:3001
+      API_ORIGIN: http://admitly-api:3001
     depends_on:
       api:
         condition: service_healthy
